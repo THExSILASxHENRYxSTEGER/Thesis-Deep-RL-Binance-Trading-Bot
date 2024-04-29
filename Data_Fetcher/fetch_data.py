@@ -6,43 +6,7 @@ import os
 from pandas_datareader.data import DataReader
 import numpy as np
 from copy import deepcopy
-
-###### Globale Variablen #####
-
-Tickers = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "XRPUSDT", "LTCUSDT", "BNBUSDT", "DOGEUSDT", "AVAXUSDT"]
-
-COLUMNS = {
-    "open_time": 0,
-    "open": 1,
-    "high": 2,
-    "low": 3,
-    "close": 4,
-    "volume": 5,
-    "close_time": 6,
-    "quote_volume": 7,
-    "count": 8,
-    "taker_buy_volume": 9,
-    "taker_buy_quote_volume": 10,	
-    "ignore": 11
-    }
-
-DATASET_PERIODS = {
-    #"train_set" : [dt.datetime(2019,9,8,0,0), dt.datetime(2023,9,30,23,55)],   # Training set: 8. September 2019 bis  31. September 2023
-    "test_set"  : [dt.datetime(2023,10,1,0,0), dt.datetime(2024, 1,15,23,55)], # Testing set: 1. Juli 2023 bis 30. November 2023
-    "valid_set" : [dt.datetime(2024,1,16,0,0), dt.datetime(2024,4,15,23,55)],  # Validation set: 1. Dezember 2023 bis 31. März 2024
-}
-
-BINANCE_API_URL = "https://api.binance.com/api/v3/klines"
-
-TREASURY_INTEREST_API_CODES = {
-    "1_Year" : "DGS1",   # 1 year Treasury Interest rate
-    "5_Year" : "DGS5",   # 5 year Treasury Interest rate
-    "10_Year" : "DGS10", # 10 year Treasury Interest rate
-}
-
-TREASURY_DATA_SOURCE = "fred"
-
-###### Funktionen #######
+from global_variables import *
 
 def get_n_step_binance_bars(symbol, interval, start_date, end_time, delete_cols=["close_time", "ignore"],limit = "1000"):
     start_date = str(int(start_date.timestamp()*1000))
@@ -79,6 +43,20 @@ def get_binance_data(ticker, start_date=dt.datetime(2019, 8, 9), end_time=dt.dat
     data.to_csv(path, index_label="open_time")
     return path
 
+def fill_missing_treasury_days_with_nan(timestamps, interest_rates):
+    ts_filled, intrst_filled = list(), list() 
+    for i in range(len(timestamps)):
+        ts_filled.append(timestamps[i])
+        intrst_filled.append(interest_rates[i])
+        if i+1 < len(timestamps) and timestamps[i] + dt.timedelta(days=1) != timestamps[i+1]:
+            j = 0
+            while timestamps[i]+dt.timedelta(days=1+j) != timestamps[i+1]:
+                ts_filled.append(timestamps[i]+dt.timedelta(days=1+j))
+                intrst_filled.append(np.nan)
+                j+=1
+    return ts_filled, intrst_filled
+
+
 def fill_nans_with_previous_val(series):
     prev_val = np.nan
     for val in series: 
@@ -96,33 +74,44 @@ def fill_nans_with_previous_val(series):
 
 def get_treasury_data(start_time, end_time, time_series):
     assert len(time_series) > 0, "There is no price data to get Treasury Bond data for"
-    interest_rates_interval = list()
+    intrst_intrvls = list()
     for timeframe in TREASURY_INTEREST_API_CODES.keys():
         series_code = TREASURY_INTEREST_API_CODES[timeframe]
         treasury_data = DataReader(series_code, TREASURY_DATA_SOURCE, start_time-dt.timedelta(days=5), end_time+dt.timedelta(days=5))
         timestamps = [dt.datetime.strptime(str(x), '%Y-%m-%d %H:%M:%S') for x in list(treasury_data.index)]
         interest_rates = list(treasury_data[series_code])
+        timestamps, interest_rates =  fill_missing_treasury_days_with_nan(timestamps, interest_rates)
         interest_rates = fill_nans_with_previous_val(interest_rates)
         prev_ts, prev_intrst = timestamps.pop(0), interest_rates.pop(0)
-        price_time = dt.datetime.fromtimestamp(time_series.pop(0))
+        time_series_cpy = deepcopy(time_series)
+        price_time = dt.datetime.fromtimestamp(time_series_cpy.pop(0))
+        interest_rate_interval = list()
         for ts, intrst in zip(timestamps, interest_rates):
-            while prev_ts <= price_time and price_time < ts and time_series:
-                interest_rates_interval.append(prev_intrst)
-                price_time = dt.datetime.fromtimestamp(time_series.pop(0))
+            while prev_ts <= price_time and price_time < ts and time_series_cpy:
+                interest_rate_interval.append(prev_intrst)
+                price_time = dt.datetime.fromtimestamp(time_series_cpy.pop(0))
             prev_ts, prev_intrst = ts, intrst
+        interest_rate_interval.append(interest_rate_interval[len(interest_rate_interval)-1])
+        intrst_intrvls.append(interest_rate_interval)
+    return intrst_intrvls
 
 def split_into_data_sets(ticker, interval="5m"):
     for data_set in DATASET_PERIODS.keys():
         start_date, end_date = DATASET_PERIODS[data_set]
-        out_path = get_binance_data(ticker, start_date, end_date, interval, data_set, csv_path=os.path.join(os.getcwd(), "Data_Fetcher/Data"))
-        time_series = list(pd.read_csv(out_path)["open_time.1"])
-        treasury_data = get_treasury_data(start_date, end_date ,time_series) # !!!!! fetch treasury data
-        break
+        out_path = get_binance_data(ticker, start_date, end_date, interval, data_set, csv_path=os.path.join(os.getcwd(), "Data"))
+        ticker_data = pd.read_csv(out_path)
+        time_series = list(ticker_data["open_time.1"])
+        treasury_data = get_treasury_data(start_date, end_date, deepcopy(time_series)) # fetch treasury data
+        tckr_data_updtd = ticker_data.to_dict("list")
+        tckr_data_updtd["open_time"] = tckr_data_updtd["open_time.1"]
+        tckr_data_updtd.pop("open_time.1")
+        tckr_data_updtd.pop("index")
+        for i, intrsts in enumerate(TREASURY_INTEREST_API_CODES.keys()):
+            tckr_data_updtd[f"{intrsts}_Treasury_Yield"] = treasury_data[i]
+        os.remove(out_path)
+        pd.DataFrame(tckr_data_updtd).to_csv(out_path)
 
-
-#get_binance_data("BTCUSDT", dt.datetime(2024,2,8,12,29,24), dt.datetime.now(), "5m", csv_path=os.path.join(os.getcwd(), "Data"))
-
-#get_treasury_data(dt.datetime(2024,2,8,12,29,24), dt.datetime.now())
-
-split_into_data_sets(Tickers[0])
-
+def collect_all_datasets(): # run this function to get all datasets
+    for ticker in TICKERS:
+        for freq in DATA_FREQUENCIES:
+            split_into_data_sets(ticker, freq)
