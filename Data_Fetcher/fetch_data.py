@@ -115,3 +115,55 @@ def collect_all_datasets(): # run this function to get all datasets
     for ticker in TICKERS:
         for freq in DATA_FREQUENCIES:
             split_into_data_sets(ticker, freq)
+
+def unite_sub_dataset(subsets, time_frame="5m", set_type="train"):
+    untd_ds = dict()
+    fst_sbst = subsets[list(subsets.keys())[0]]
+    untd_ds["open_time"] = list(fst_sbst["open_time"])
+    untd_ds["1_Year_Treasury_Yield"] = list(fst_sbst["1_Year_Treasury_Yield"])
+    untd_ds["5_Year_Treasury_Yield"] = list(fst_sbst["5_Year_Treasury_Yield"])
+    untd_ds["10_Year_Treasury_Yield"] = list(fst_sbst["10_Year_Treasury_Yield"])
+    untd_ds["set_type"] = [SET_TYPE_ENCODING[set_type] for _ in range(len(untd_ds["open_time"]))]
+    cmn_clmns = deepcopy(COLUMNS)
+    for clmn in ["open_time", "ignore", "close_time"]:
+        cmn_clmns.pop(clmn)
+    for sbst_name in subsets.keys():
+        tckr = sbst_name.replace(f"_{time_frame}_{set_type}_set", "")
+        for cmn_clmn in cmn_clmns.keys():
+            untd_ds[f"{tckr}_{cmn_clmn}"] = list(subsets[sbst_name][cmn_clmn])
+    return untd_ds
+
+def unite_final_dataset(time_frame="5m"):
+    train_sets, test_sets, valid_sets, = dict(), dict(), dict()
+    data_dir = __file__.replace("fetch_data.py","Data")
+    delete_files = list()
+    for ticker in TICKERS:
+        base_set = f"{ticker}_{time_frame}"
+        train_csv_path = os.path.join(data_dir,f"{base_set}_train_set.csv")
+        train_sets[f"{base_set}_train_set"] = pd.read_csv(train_csv_path)
+        test_csv_path = os.path.join(data_dir,f"{base_set}_test_set.csv")
+        test_sets[f"{base_set}_test_set"] = pd.read_csv(test_csv_path)
+        valid_csv_path = os.path.join(data_dir,f"{base_set}_valid_set.csv")
+        valid_sets[f"{base_set}_valid_set"] = pd.read_csv(valid_csv_path)
+        delete_files.extend([train_csv_path, test_csv_path, valid_csv_path])
+    train_sbst = unite_sub_dataset(train_sets, time_frame, "train")
+    test_sbst = unite_sub_dataset(test_sets, time_frame, "test")
+    valid_sbst = unite_sub_dataset(valid_sets, time_frame, "valid")
+    fnl_ds = {key:list() for key in train_sbst.keys()}
+    for sbst in [train_sbst, test_sbst, valid_sbst]:
+        for key in sbst.keys():
+            fnl_ds[key].extend(sbst[key])
+    ds_name = f"{time_frame}_data.csv"
+    pd.DataFrame(fnl_ds).to_csv(os.path.join(data_dir, ds_name))
+    for file in delete_files:
+        os.remove(os.path.join(data_dir, file))
+
+def get_all_united_datasets():
+    for frequency in DATA_FREQUENCIES:
+        unite_final_dataset(frequency)
+
+DATA_IS_FETCHED = True
+
+if not DATA_IS_FETCHED:
+    collect_all_datasets()
+    get_all_united_datasets()

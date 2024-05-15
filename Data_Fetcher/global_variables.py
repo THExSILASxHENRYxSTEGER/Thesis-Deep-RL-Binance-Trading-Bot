@@ -34,3 +34,15 @@ TREASURY_INTEREST_API_CODES = {
 }
 
 TREASURY_DATA_SOURCE = "fred"
+
+SET_TYPE_ENCODING = {
+    "train" : 0,
+    "test" : 1,
+    "valid" : 2
+}
+
+BINANCE_TRANSACTION_COST = 0.001 # Binance cost of making a trade
+
+MAX_STAKE = 1/5 # maximum percentage of the portfolio that can be invested in any one currency, in this case 20 %
+
+A_THRESHOLD = 0.51 # once the action value is above this number (a_t in [-1,1]) we buy
