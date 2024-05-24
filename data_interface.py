@@ -7,8 +7,8 @@ from copy import deepcopy
 import matplotlib.pyplot as plt
 
 class Interface:
-
-    def __init__(self, data_dir = os.path.join(__file__.replace("/data_interface.py", ""), "Data_Fetcher", "Data")): # change path for training in kaggle
+    
+    def __init__(self, data_dir = os.path.abspath("Data_Fetcher/Data")): # change path for training in kaggle
         self.data_dir = data_dir
 
     def get_dataset(self, interval="5m"):
@@ -67,6 +67,11 @@ class Interface:
             rtrns.append((price_series[i]-p_0)/p_0)
             p_0 = price_series[i]
         return rtrns
+    
+    @staticmethod
+    def norm_srs(series):
+        max_axis = np.max(np.abs(series), axis=1)
+        return (series.T/max_axis).T
 
     @staticmethod
     def avg_series(rtrns:dict):
@@ -96,20 +101,6 @@ class Interface:
                     w[n] = 1-len(invst_indcs)*max_stake
             w_s.append(w)
         return np.array(w_s).T
-    
-    @staticmethod
-    def avg_cum_rtrns(rtrns, only_cumulative=False):
-        n_currencies = len(rtrns)
-        n = np.ones(n_currencies)*1/n_currencies
-        rtrns_cumulative = [list() for _ in rtrns]
-        for col in np.array(list(rtrns)).T:
-            for j, period_rtrn in enumerate(col):
-                n[j] *= 1+period_rtrn
-                rtrns_cumulative[j].append(n[j])
-        if only_cumulative:
-            return np.array(rtrns_cumulative)-1/n_currencies
-        rtrns_cumulative = np.sum(np.array(rtrns_cumulative), axis=0)-1 
-        return rtrns_cumulative
     
     @staticmethod
     def avg_weighted_cum_rtrns(weights:np.array, rtrns:np.array, trnsctn_cost=BINANCE_TRANSACTION_COST, only_cumulative=False): 

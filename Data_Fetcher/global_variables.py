@@ -1,4 +1,5 @@
 import datetime as dt 
+import torch
 
 TICKERS = ["BTCUSDT", "ETHUSDT", "ADAUSDT", "XRPUSDT", "LTCUSDT", "BNBUSDT", "DOGEUSDT"] #, "AVAXUSDT", "SOLUSDT"]
 
@@ -30,15 +31,15 @@ BINANCE_API_URL = "https://api.binance.com/api/v3/klines"
 TREASURY_INTEREST_API_CODES = {
     "1_Year" : "DGS1",   # 1 year Treasury Interest rate
     "5_Year" : "DGS5",   # 5 year Treasury Interest rate
-    "10_Year" : "DGS10", # 10 year Treasury Interest rate
+    "10_Year": "DGS10",  # 10 year Treasury Interest rate
 }
 
 TREASURY_DATA_SOURCE = "fred"
 
 SET_TYPE_ENCODING = {
-    "train" : 0,
+    "train": 0,
     "test" : 1,
-    "valid" : 2
+    "valid": 2
 }
 
 BINANCE_TRANSACTION_COST = 0.001 # Binance cost of making a trade
@@ -46,3 +47,27 @@ BINANCE_TRANSACTION_COST = 0.001 # Binance cost of making a trade
 MAX_STAKE = 1/5 # maximum percentage of the portfolio that can be invested in any one currency, in this case 20 %
 
 A_THRESHOLD = 0.51 # once the action value is above this number (a_t in [-1,1]) we buy
+
+HOURS_TO_LOOK_BACK = 8
+
+WINDOW_SIZES = {
+    "5m" :int((60/5)*HOURS_TO_LOOK_BACK),
+    "15m":int((60/15)*HOURS_TO_LOOK_BACK),
+    "30m":int((60/30)*HOURS_TO_LOOK_BACK),
+    "1h" : HOURS_TO_LOOK_BACK
+}
+
+DQN_ACTIONS = { # hold is not being implemented since for example to assume the buy 
+    "BUY" : 1,  # position two times afert each other is the same as to hold 
+    "SELL": 0,
+}
+
+EPS_TIMESTEPS = int(1e7)  
+EXPLORE_FRAC = 0.1
+EPSILON = lambda i: 1 - 0.99 * min(1, i/(EPS_TIMESTEPS * EXPLORE_FRAC))
+TARGET_UPDATE_FREQUENCY = 1000  # how frequency target q net update
+TRAINING_FREQUENCY = 4
+BATCH_SIZE = 32
+WARM_START = 1000  # sample times before learning
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
