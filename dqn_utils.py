@@ -81,7 +81,8 @@ class DQN_AGENT:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        torch.cuda.empty_cache() 
+        torch.cuda.empty_cache()
+        return loss 
 
     def update_target_net(self):
         self.target_net.load_state_dict(self.policy_net.state_dict())
