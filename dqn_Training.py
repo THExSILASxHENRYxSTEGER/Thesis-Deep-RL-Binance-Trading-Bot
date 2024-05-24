@@ -27,7 +27,6 @@ n_steps = 0
 episode_losses, episode_rewards = list(), list()
 for i in range(n_episodes):
     S_t = env.reset()
-    print(f"Episode: {i}")
     while not D_t:
         A_t = agent.take_action(S_t, n_steps)
         S_prime, R_t, D_t = env.step(A_t)
@@ -42,8 +41,10 @@ for i in range(n_episodes):
         if n_steps % TARGET_UPDATE_FREQUENCY == 0:
             agent.update_target_net()
         n_steps += 1
-    losses.append(np.mean(episode_losses))
-    rewards.append(np.mean(episode_rewards))
+    l, r = np.mean(episode_losses), np.mean(episode_rewards)
+    losses.append(l)
+    rewards.append(r)
+    print(f"Episode: {i}, Timesteps: {n_steps}, avg loss: {l}, avg reward: {r}")
 
 PATH = os.path.join(os.getcwd(), 'qnet')
 torch.save(agent.policy_net.state_dict(), PATH)
