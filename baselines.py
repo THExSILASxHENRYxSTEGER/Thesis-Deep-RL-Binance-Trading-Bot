@@ -81,7 +81,7 @@ class MACD:
             A_t = [x*np.exp(-(x**2/4))/self.action_scale for x in macd_t]
             A_ts.append(A_t)
         return A_ts
-    
+
     def get_rtrns(self, prcs): # since MACD starts at p_timescale + q_timescale istead of index 0 returns need adjustment
         rtrns = [Interface.make_prices_to_returns(prc_srs[len(prc_srs)-self.macd_len-1:]) for prc_srs in prcs]    
         return np.array(rtrns)

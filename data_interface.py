@@ -69,8 +69,9 @@ class Interface:
         return rtrns
     
     @staticmethod
-    def norm_srs(series):
+    def norm_srs(series, get_max_axis=False):
         max_axis = np.max(np.abs(series), axis=1)
+        if get_max_axis: return max_axis 
         return (series.T/max_axis).T
 
     @staticmethod

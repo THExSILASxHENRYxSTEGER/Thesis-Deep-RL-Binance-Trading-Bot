@@ -4,7 +4,7 @@ from torch.optim import Adam
 from torch import nn
 from copy import deepcopy
 
-torch.seed(0)
+torch.manual_seed(0)
 
 def state_to_device(S_t, device):
     window, position = S_t
@@ -54,19 +54,21 @@ class ReplayBuffer:
 
 class DQN_AGENT:
 
-    def __init__(self, eps, action_space, network, device, gamma=0.99, optimizer=Adam, loss=nn.MSELoss) -> None:
+    def __init__(self, eps, action_space, network, device, gamma=0.99, optimizer=Adam, loss=nn.MSELoss, training=True) -> None:
         self.eps = eps
         self.action_space = action_space
         self.device = device
         self.gamma = gamma
+        self.training = training
         self.policy_net = network.float().to(self.device)
         self.target_net = deepcopy(network).float().to(self.device)
         self.update_target_net()
-        self.optimizer = optimizer(self.policy_net.parameters())
-        self.loss = loss()
+        if self.training:
+            self.optimizer = optimizer(self.policy_net.parameters())
+            self.loss = loss()
 
-    def take_action(self, S_t, t):
-        if self.eps(t) > np.random.rand():
+    def take_action(self, S_t, n_episode):
+        if self.eps(n_episode) > np.random.rand() and self.training:
             return np.argmax(np.random.rand(self.action_space))
         else:
             S_t = state_to_device(S_t, self.device)
@@ -101,7 +103,6 @@ class CNN(nn.Module):
             mlp_seq.append(nn.Linear(**layer))
             mlp_seq.append(nn.LeakyReLU())
         mlp_seq.append(nn.Linear(**final_layer))
-        #mlp_seq.append(nn.Softmax())
         self.cnn = nn.Sequential(*conv_seq)
         self.mlp = nn.Sequential(*mlp_seq)
 
@@ -144,5 +145,15 @@ class CNN(nn.Module):
     
 class LSTM(nn.Module):
     
-    def __init__(self) -> None:
-        super(CNN, self).__init__()
+    def __init__(self, in_sz, h_sz, n_lstm_lyrs, action_space, n_mlp_lyrs=2, mlp_intermed_size=128) -> None:
+        super(LSTM, self).__init__()
+        self.lstm = [nn.LSTMCell(in_sz, h_sz) for _ in range(n_lstm_lyrs)]
+
+        
+
+    def forward(self, S_t):
+        window, position = S_t
+
+    @staticmethod
+    def create_cells():
+        pass
