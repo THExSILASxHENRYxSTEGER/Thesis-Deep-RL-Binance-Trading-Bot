@@ -1,6 +1,6 @@
 from data_interface import Interface
 from environment import Environment
-from dqn_utils import DQN_AGENT, ReplayBuffer, CNN, LSTM
+from RL_utils import DQN_AGENT, ReplayBuffer, CNN, LSTM
 from Data_Fetcher.global_variables import EPSILON, TARGET_UPDATE_FREQUENCY, TRAINING_FREQUENCY, BATCH_SIZE, WARM_START, DQN_ACTIONS, DEVICE, N_EPIODES
 import numpy as np
 import matplotlib.pyplot as plt

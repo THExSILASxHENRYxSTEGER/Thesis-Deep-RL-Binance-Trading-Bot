@@ -1,33 +1,23 @@
-import os
 import torch
 from data_interface import Interface
 from environment import Environment
-from dqn_utils import DQN_AGENT, CNN, LSTM
+from RL_utils import DQN_AGENT, load_q_func
 from Data_Fetcher.global_variables import DEVICE, DQN_ACTIONS, EPSILON
 import numpy as np
 import matplotlib.pyplot as plt
 
-def dqn_cum_rtrns(model_path, set_type="train", interval="30m", model="CNN"):
+plot_cum_rtrns = False
+
+def dqn_cum_rtrns(q_func, set_type="train", interval="30m"):
     intfc = Interface()
     env = Environment(intfc, set_type=set_type, interval=interval) # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! if test which is case here normalize with data from train set
     crncy_episodes = env.get_episode_windows()
 
-    n_episodes, n_steps, data_cols, window_len = crncy_episodes.shape
+    n_episodes, n_steps, _, window_size = crncy_episodes.shape
 
     action_space = len(DQN_ACTIONS)
 
-    if model == "CNN":
-        cnn_layers, mlp_layers = CNN.create_conv1d_layers(data_cols, data_cols, window_len, action_space, n_cnn_layers=4, n_mlp_layers=2) 
-        model = CNN(cnn_layers, mlp_layers)
-    else:
-        #model = LSTM(...)
-        pass 
-    
-    model_state_dict = torch.load(model_path, map_location=DEVICE)
-    model.load_state_dict(model_state_dict)
-    model.eval()
-
-    agent = DQN_AGENT(EPSILON, action_space, model, device=DEVICE, training=False)
+    agent = DQN_AGENT(EPSILON, action_space, q_func, device=DEVICE, training=False)
 
     A_ts = list()
     prev_position = torch.zeros(n_episodes)
@@ -55,9 +45,12 @@ def dqn_cum_rtrns(model_path, set_type="train", interval="30m", model="CNN"):
     rtrns = rtrns[:,dffrce+1:]
 
     cum_rtrns = Interface.avg_weighted_cum_rtrns(weights, rtrns)
+    filler = np.zeros(window_size-1)
+    cum_rtrns = np.concatenate([filler, cum_rtrns])
     return cum_rtrns
 
-model_path = f"{os.path.abspath('')}/Models/qnet"
-cum_rtrns = dqn_cum_rtrns(model_path, set_type="test") 
-plt.plot(range(len(cum_rtrns)), cum_rtrns)
-plt.show()
+if plot_cum_rtrns:
+    q_func = load_q_func("DQN_CNN_8_8_16_2_4_4_1_16_128_2_1")
+    cum_rtrns = dqn_cum_rtrns(q_func, set_type="test") 
+    plt.plot(range(len(cum_rtrns)), cum_rtrns)
+    plt.show()

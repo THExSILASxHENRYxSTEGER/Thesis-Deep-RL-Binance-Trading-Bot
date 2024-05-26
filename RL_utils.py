@@ -3,6 +3,8 @@ import torch
 from torch.optim import Adam
 from torch import nn
 from copy import deepcopy
+import os
+from Data_Fetcher.global_variables import DEVICE
 
 torch.manual_seed(0)
 
@@ -119,7 +121,7 @@ class CNN(nn.Module):
         cnn_layers = list()
         for i in range(n_cnn_layers):
             layer_dict = {
-                "in_channels":cnn_intermed_chnls, 
+                "in_channels": cnn_intermed_chnls, 
                 "out_channels":cnn_intermed_chnls, 
                 "kernel_size": kernel_size
             }
@@ -149,11 +151,23 @@ class LSTM(nn.Module):
         super(LSTM, self).__init__()
         self.lstm = [nn.LSTMCell(in_sz, h_sz) for _ in range(n_lstm_lyrs)]
 
-        
-
     def forward(self, S_t):
         window, position = S_t
 
     @staticmethod
     def create_cells():
         pass
+
+def load_q_func(model_name, path=f"{os.path.abspath('')}/Models", device=DEVICE): # the model parameters are encoded in the name
+    model_components = model_name.split("_")
+    _ = model_components.pop(0)
+    q_func = model_components.pop(0)
+    if q_func == "CNN":
+        cnn_layers, mlp_layers = CNN.create_conv1d_layers(*[int(param) for param in model_components])
+        model = CNN(cnn_layers, mlp_layers)
+        model_state_dict = torch.load(os.path.join(path, model_name), map_location=device)
+        model.load_state_dict(model_state_dict)
+        model.eval()
+    elif q_func == "LSTM":
+        pass
+    return model

@@ -104,7 +104,7 @@ class Interface:
         return np.array(w_s).T
     
     @staticmethod
-    def avg_weighted_cum_rtrns(weights:np.array, rtrns:np.array, trnsctn_cost=BINANCE_TRANSACTION_COST, only_cumulative=False): 
+    def avg_weighted_cum_rtrns(weights:np.array, rtrns:np.array, trnsctn_cost=BINANCE_TRANSACTION_COST, only_cumulative=False)->np.array: 
         n, T = rtrns.shape
         rtrns = np.concatenate((rtrns, np.atleast_2d(np.zeros(T))), axis=0)
         cum_rtrns, prev_ws = [weights[:,0]], weights[:,0]
