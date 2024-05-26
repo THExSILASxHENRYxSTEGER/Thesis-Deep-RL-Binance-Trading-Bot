@@ -62,9 +62,9 @@ DQN_ACTIONS = { # hold is not being implemented since for example to assume the 
     "SELL": 0,
 }
 
-EPS_TIMESTEPS = int(1e7)  
+N_EPIODES = 300  
 EXPLORE_FRAC = 0.1
-EPSILON = lambda i: 1 - 0.99 * min(1, i/(EPS_TIMESTEPS * EXPLORE_FRAC))
+EPSILON = lambda i: 1 - 0.99 * min(1, i/(N_EPIODES * EXPLORE_FRAC))
 TARGET_UPDATE_FREQUENCY = 1000  # how frequency target q net update
 TRAINING_FREQUENCY = 4
 BATCH_SIZE = 32
