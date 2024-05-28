@@ -10,7 +10,7 @@ plot_cum_rtrns = False
 
 def dqn_cum_rtrns(q_func, set_type="train", interval="30m"):
     intfc = Interface()
-    env = Environment(intfc, set_type=set_type, interval=interval) # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! if test which is case here normalize with data from train set
+    env = Environment(intfc, set_type=set_type, interval=interval) 
     crncy_episodes = env.get_episode_windows()
 
     n_episodes, n_steps, _, window_size = crncy_episodes.shape
@@ -50,7 +50,7 @@ def dqn_cum_rtrns(q_func, set_type="train", interval="30m"):
     return cum_rtrns
 
 if plot_cum_rtrns:
-    q_func = load_q_func("DQN_CNN_8_8_16_2_4_4_1_16_128_2_1")
+    q_func = load_q_func("DQN_LSTM_8_20_16_2_2_128_1")
     cum_rtrns = dqn_cum_rtrns(q_func, set_type="test") 
     plt.plot(range(len(cum_rtrns)), cum_rtrns)
     plt.show()

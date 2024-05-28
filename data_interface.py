@@ -48,7 +48,7 @@ class Interface:
 
     @staticmethod
     def plot_rtrns(rtrns, timeline, title, cum=True, labels=TICKERS):
-        plt.xticks(rotation=45)
+        plt.xticks(rotation=25)
         if cum:
             plt.plot(timeline, rtrns)
         else:

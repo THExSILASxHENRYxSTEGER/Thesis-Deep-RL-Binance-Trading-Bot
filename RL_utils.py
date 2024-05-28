@@ -7,6 +7,7 @@ import os
 from Data_Fetcher.global_variables import DEVICE
 
 torch.manual_seed(0)
+np.random.seed(0)
 
 def state_to_device(S_t, device):
     window, position = S_t
@@ -45,12 +46,12 @@ class ReplayBuffer:
             wndw, pos = s_
             b_wndws_.append(wndw)
             b_pos_.append(pos)
-        b_wndws = torch.tensor(b_wndws).float().to(self.device)
+        b_wndws = torch.tensor(np.array(b_wndws)).float().to(self.device)
         b_pos = torch.tensor(b_pos).float().to(self.device)
         b_a = torch.eye(self.action_space)[b_a].to(self.device)
         b_r = torch.tensor(b_r).float().to(self.device)
         b_d = torch.tensor(b_d).float().to(self.device)
-        b_wndws_ = torch.tensor(b_wndws_).float().to(self.device)
+        b_wndws_ = torch.tensor(np.array(b_wndws_)).float().to(self.device)
         b_pos_ = torch.tensor(b_pos_).float().to(self.device)
         return (b_wndws, b_pos), b_a, b_r, b_d, (b_wndws_, b_pos_)
 
@@ -60,7 +61,7 @@ class DQN_AGENT:
         self.eps = eps
         self.action_space = action_space
         self.device = device
-        self.gamma = gamma
+        self.gamma = torch.tensor(gamma).to(self.device)
         self.training = training
         self.policy_net = network.float().to(self.device)
         self.target_net = deepcopy(network).float().to(self.device)
@@ -70,7 +71,7 @@ class DQN_AGENT:
             self.loss = loss()
 
     def take_action(self, S_t, n_episode):
-        if self.eps(n_episode) > np.random.rand() and self.training:
+        if self.eps(n_episode) > np.random.rand() and self.training: 
             return np.argmax(np.random.rand(self.action_space))
         else:
             S_t = state_to_device(S_t, self.device)
@@ -147,27 +148,43 @@ class CNN(nn.Module):
     
 class LSTM(nn.Module):
     
-    def __init__(self, in_sz, h_sz, n_lstm_lyrs, action_space, n_mlp_lyrs=2, mlp_intermed_size=128) -> None:
+    def __init__(self, in_sz, h_sz, n_lstm_lyrs, action_space, n_mlp_lyrs=2, mlp_intermed_size=128, punctual_vals=1) -> None:
         super(LSTM, self).__init__()
-        self.lstm = [nn.LSTMCell(in_sz, h_sz) for _ in range(n_lstm_lyrs)]
+        self.h_sz = h_sz
+        self.lstm_cells = nn.Sequential(*[nn.LSTMCell(in_sz, h_sz) for _ in range(n_lstm_lyrs)])
+        mlp_lyrs = list()
+        for i in range(n_mlp_lyrs):
+            in_features, out_features = mlp_intermed_size, mlp_intermed_size
+            if i == 0:
+                in_features = h_sz + punctual_vals
+            if i == n_mlp_lyrs-1:
+                out_features = action_space
+                mlp_lyrs.append(nn.Linear(in_features, out_features))
+                break
+            mlp_lyrs.append(nn.Linear(in_features, out_features))
+            mlp_lyrs.append(nn.LeakyReLU())
+        self.mlp = nn.Sequential(*mlp_lyrs)
 
-    def forward(self, S_t):
+    def forward(self, S_t, device=DEVICE):
         window, position = S_t
+        n_batches, in_size, n_cells = window.shape 
+        window = window.reshape(n_cells, n_batches, in_size)
+        hx, cx = torch.zeros((n_batches, self.h_sz)).to(device), torch.zeros((n_batches, self.h_sz)).to(device)
+        for i in range(len(self.lstm_cells)):
+            hx, cx = self.lstm_cells[i](window[i], (hx, cx))
+        mlp_in = torch.concat((hx, torch.atleast_2d(position).T), dim=1)
+        return self.mlp(mlp_in)
 
-    @staticmethod
-    def create_cells():
-        pass
-
-def load_q_func(model_name, path=f"{os.path.abspath('')}/Models", device=DEVICE): # the model parameters are encoded in the name
-    model_components = model_name.split("_")
-    _ = model_components.pop(0)
-    q_func = model_components.pop(0)
+def load_q_func(q_func_name, path=f"{os.path.abspath('')}/Models", device=DEVICE): # the model parameters are encoded in the name
+    q_func_components = q_func_name.split("_")
+    _ = q_func_components.pop(0)
+    q_func = q_func_components.pop(0)
     if q_func == "CNN":
-        cnn_layers, mlp_layers = CNN.create_conv1d_layers(*[int(param) for param in model_components])
-        model = CNN(cnn_layers, mlp_layers)
-        model_state_dict = torch.load(os.path.join(path, model_name), map_location=device)
-        model.load_state_dict(model_state_dict)
-        model.eval()
+        cnn_layers, mlp_layers = CNN.create_conv1d_layers(*[int(param) for param in q_func_components])
+        q_func = CNN(cnn_layers, mlp_layers)
     elif q_func == "LSTM":
-        pass
-    return model
+        q_func = LSTM(*[int(param) for param in q_func_components])
+    q_func_state_dict = torch.load(os.path.join(path, q_func_name), map_location=device)
+    q_func.load_state_dict(q_func_state_dict)
+    q_func.eval()
+    return q_func

@@ -14,19 +14,24 @@ episodes, episode_len, data_cols, window_len = env.episodes.shape
 
 action_space = len(DQN_ACTIONS)
 
-network_type = "CNN"
+network_type = "LSTM"
 
 if network_type == "CNN":
-    cnn_layers, mlp_layers = CNN.create_conv1d_layers(data_cols, data_cols, window_len, action_space, n_cnn_layers=4, n_mlp_layers=2) 
+    model_parameters = {"in_chnls":data_cols, "out_chnls":data_cols, "time_series_len":window_len, "action_space":action_space, "n_cnn_layers":4, "kernel_size":4, 
+                        "kernel_div":1, "cnn_intermed_chnls":16, "mlp_intermed_size":128, "n_mlp_layers":2, "punctual_vals":1}
+    cnn_layers, mlp_layers = CNN.create_conv1d_layers(**model_parameters) 
     network = CNN(cnn_layers, mlp_layers)
 else:
-    h_size = 20
-    network = LSTM(data_cols, h_size, window_len, action_space)
+    model_parameters = {"in_sz":data_cols, "h_sz":20, "n_lstm_lyrs":window_len, "action_space":action_space, "n_mlp_lyrs":2, "mlp_intermed_size":128, "punctual_vals":1}
+    network = LSTM(**model_parameters)
+
+str_vals = "_".join([str(param) for param in model_parameters.values()])
+model_q_func_name = f"DQN_{network_type}_{str_vals}"
 
 agent = DQN_AGENT(EPSILON, action_space, network, DEVICE)
 buffer = ReplayBuffer(int(episodes*episode_len/3), BATCH_SIZE, DEVICE, action_space)
 
-rewards = list()
+sum_rewards, avg_rewards = list(), list()
 
 n_steps = 0
 for n_episode in range(N_EPIODES):
@@ -46,14 +51,22 @@ for n_episode in range(N_EPIODES):
         if n_steps % TARGET_UPDATE_FREQUENCY == 0:
             agent.update_target_net()
         n_steps += 1
-    r = np.sum(episode_rewards)
-    rewards.append(r)
-    print(f"Episode: {n_episode}, Timesteps: {n_steps}, avg reward: {r}")
+    sum_r = np.sum(episode_rewards)
+    sum_rewards.append(sum_r)
+    avg_r = np.mean(episode_rewards)
+    avg_rewards.append(avg_r)
+    print(f"Episode: {n_episode}, Timesteps: {n_steps}, sum reward: {sum_r}, avg reward: {avg_r}")
 
-PATH = os.path.join(os.getcwd(), 'qnet')
+PATH = os.path.join(os.getcwd(), model_q_func_name)
 torch.save(agent.policy_net.state_dict(), PATH)
 
-plt.show(range(len(episode_rewards)), episode_rewards)
-plt.xlabel("Episode")
-plt.ylabel("avg loss")
+
+plt.plot(range(len(sum_rewards)), sum_rewards)
+plt.xlabel("episode")
+plt.ylabel("sum episode returns")
+plt.show()
+
+plt.plot(range(len(avg_rewards)), avg_rewards)
+plt.xlabel("episode")
+plt.ylabel("avg episode returns")
 plt.show()
