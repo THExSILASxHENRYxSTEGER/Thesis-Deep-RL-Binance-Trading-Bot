@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch.optim import Adam
 from torch import nn
+from torch.distributions import Categorical
 from copy import deepcopy
 import os
 from Data_Fetcher.global_variables import DEVICE
@@ -9,13 +10,7 @@ from Data_Fetcher.global_variables import DEVICE
 torch.manual_seed(0)
 np.random.seed(0)
 
-def state_to_device(S_t, device):
-    window, position = S_t
-    window = torch.tensor(window).float().to(device)
-    r, c = window.shape
-    window = window.reshape(1, r, c)
-    position = torch.tensor(position).float().to(device)
-    return (window, position)
+############################### Deep-Q-Network Utilities #######################################
 
 class ReplayBuffer:
 
@@ -70,18 +65,29 @@ class DQN_AGENT:
             self.optimizer = optimizer(self.policy_net.parameters())
             self.loss = loss()
 
-    def take_action(self, S_t, n_episode):
-        if self.eps(n_episode) > np.random.rand() and self.training: 
+    def select_action(self, S_t, n_episode):
+        if self.eps(n_episode) < np.random.rand() and self.training: #>
             return np.argmax(np.random.rand(self.action_space))
         else:
-            S_t = state_to_device(S_t, self.device)
+            S_t = self.state_to_device(S_t)
             A_t = torch.argmax(self.policy_net(S_t))
             torch.cuda.empty_cache()
             return A_t
+        
+    def state_to_device(self, S_t):
+        window, position = S_t
+        window = torch.tensor(window).float().to(self.device)
+        r, c = window.shape
+        window = window.reshape(1, r, c)
+        position = torch.tensor(position).float().to(self.device)
+        return (window, position)
 
-    def train(self, b_s, b_a, b_r, b_d, b_s_): # at end of function torch.cuda.empty_cache()
-        target = b_r + (torch.ones_like(b_d)-b_d) * self.gamma * torch.max(self.target_net(b_s_), dim=1)[0]
-        pred = torch.sum(self.policy_net(b_s) * b_a, dim=1)
+    def train(self, b_s, b_a, b_r, b_d, b_s_, dqn_type="Vanilla"): # at end of function torch.cuda.empty_cache()
+        if dqn_type == "Vanilla":
+            pred = torch.sum(self.policy_net(b_s) * b_a, dim=1)
+            target = b_r + (torch.ones_like(b_d)-b_d) * self.gamma * torch.max(self.target_net(b_s_), dim=1)[0]
+        elif dqn_type == "Double":
+            pass
         loss = self.loss(pred, target)
         self.optimizer.zero_grad()
         loss.backward()
@@ -92,6 +98,8 @@ class DQN_AGENT:
     def update_target_net(self):
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
+
+############################### Deep Learning Utilities ###########################################
 
 class CNN(nn.Module):
 
@@ -117,7 +125,7 @@ class CNN(nn.Module):
         return self.mlp(mlp_in)
 
     @staticmethod
-    def create_conv1d_layers(in_chnls, out_chnls, time_series_len, action_space, n_cnn_layers=2, kernel_size=4, 
+    def create_conv1d_layers(in_chnls, out_chnls, time_series_len, final_layer_size, n_cnn_layers=2, kernel_size=4, 
                             kernel_div=1, cnn_intermed_chnls=16, mlp_intermed_size=128, n_mlp_layers=1, punctual_vals=1):
         cnn_layers = list()
         for i in range(n_cnn_layers):
@@ -142,13 +150,13 @@ class CNN(nn.Module):
             if i == 0:
                 layer_dict["in_features"] = time_series_len*out_chnls+punctual_vals # change formula to update
             if i == n_mlp_layers-1:
-                layer_dict["out_features"] = action_space
+                layer_dict["out_features"] = final_layer_size
             mlp_layers.append(layer_dict)
         return cnn_layers, mlp_layers
     
 class LSTM(nn.Module):
     
-    def __init__(self, in_sz, h_sz, n_lstm_lyrs, action_space, n_mlp_lyrs=2, mlp_intermed_size=128, punctual_vals=1) -> None:
+    def __init__(self, in_sz, h_sz, n_lstm_lyrs, final_layer_size, n_mlp_lyrs=2, mlp_intermed_size=128, punctual_vals=1) -> None:
         super(LSTM, self).__init__()
         self.h_sz = h_sz
         self.lstm_cells = nn.Sequential(*[nn.LSTMCell(in_sz, h_sz) for _ in range(n_lstm_lyrs)])
@@ -156,9 +164,9 @@ class LSTM(nn.Module):
         for i in range(n_mlp_lyrs):
             in_features, out_features = mlp_intermed_size, mlp_intermed_size
             if i == 0:
-                in_features = h_sz + punctual_vals
+                in_features = 2*h_sz + punctual_vals
             if i == n_mlp_lyrs-1:
-                out_features = action_space
+                out_features = final_layer_size
                 mlp_lyrs.append(nn.Linear(in_features, out_features))
                 break
             mlp_lyrs.append(nn.Linear(in_features, out_features))
@@ -172,19 +180,131 @@ class LSTM(nn.Module):
         hx, cx = torch.zeros((n_batches, self.h_sz)).to(device), torch.zeros((n_batches, self.h_sz)).to(device)
         for i in range(len(self.lstm_cells)):
             hx, cx = self.lstm_cells[i](window[i], (hx, cx))
-        mlp_in = torch.concat((hx, torch.atleast_2d(position).T), dim=1)
+        mlp_in = torch.concat((hx, cx, torch.atleast_2d(position).T), dim=1)
         return self.mlp(mlp_in)
 
-def load_q_func(q_func_name, path=f"{os.path.abspath('')}/Models", device=DEVICE): # the model parameters are encoded in the name
-    q_func_components = q_func_name.split("_")
-    _ = q_func_components.pop(0)
-    q_func = q_func_components.pop(0)
+def get_base_function(q_func, q_func_components):
     if q_func == "CNN":
         cnn_layers, mlp_layers = CNN.create_conv1d_layers(*[int(param) for param in q_func_components])
         q_func = CNN(cnn_layers, mlp_layers)
     elif q_func == "LSTM":
         q_func = LSTM(*[int(param) for param in q_func_components])
+    return q_func
+
+def load_q_func(q_func_name, path=f"{os.path.abspath('')}/Models", device=DEVICE, eval=True): # the model parameters are encoded in the name
+    q_func_components = q_func_name.split("_")
+    _ = q_func_components.pop(0)
+    q_func = q_func_components.pop(0)
+    q_func = get_base_function(q_func, q_func_components)
     q_func_state_dict = torch.load(os.path.join(path, q_func_name), map_location=device)
     q_func.load_state_dict(q_func_state_dict)
-    q_func.eval()
+    if eval:
+        q_func.eval()
     return q_func
+
+def load_policy_value_func(actor_critic_func_name, path=f"{os.path.abspath('')}/Models", device=DEVICE, eval=True):
+    ac_components = actor_critic_func_name.split("_")
+    _ = ac_components.pop(0)
+    action_space = int(ac_components.pop(0))
+    final_layer_size = int(ac_components.pop(0))
+    base_func = ac_components.pop(0)
+    base_func = get_base_function(base_func, ac_components)
+    policy_value_func = Policy_Value(base_func, final_layer_size, action_space)
+    q_func_state_dict = torch.load(os.path.join(path, actor_critic_func_name), map_location=device)
+    policy_value_func.load_state_dict(q_func_state_dict)
+    if eval:
+        policy_value_func.eval()
+    return policy_value_func
+
+############################### Actor-Critic utilities ###########################################
+
+class Policy_Value(nn.Module):
+
+    def __init__(self, base_model, final_layer_size, action_space) -> None:
+        super(Policy_Value, self).__init__()
+        # base model for the policy and value function estimation 
+        self.base_model = base_model
+        # actor's final layers
+        self.policy_layer = nn.Linear(final_layer_size, action_space)
+        self.policy_activation = nn.Softmax()
+        # critic's final layer to estmate value of state
+        self.value_layer = nn.Linear(final_layer_size, 1)
+
+    def forward(self, S_t):
+        base_out = self.base_model(S_t)
+        action_out = self.policy_layer(base_out)
+        action_prob = self.policy_activation(action_out)
+        state_values = self.value_layer(base_out)
+        return action_prob, state_values
+
+class ACTOR_CRITIC_AGENT:
+
+    def __init__(self, policy_value_func, action_space, device, gamma=0.99, loss=nn.MSELoss, optimizer=Adam) -> None:
+        self.policy_value_func = policy_value_func.float().to(device)
+        self.action_space = action_space
+        self.device = device
+        self.saved_actions = list()
+        self.saved_rewards = list()
+        self.gamma = torch.tensor(gamma).float().to(self.device)
+        self.loss = loss()
+        self.optimizer = optimizer(self.policy_value_func.parameters())
+    
+    def select_action(self, S_t):
+        S_t = self.state_to_device(S_t)
+        probs, state_value = self.policy_value_func(S_t)
+        # create a categorical distribution over the list of probabilities of actions
+        m = Categorical(probs)
+        # and sample an action using the distribution
+        action = m.sample()
+        # save to action buffer
+        self.saved_actions.append((m.log_prob(action), state_value))
+        return action.item()
+
+    def state_to_device(self, S_t):
+        window, position = S_t
+        window = torch.from_numpy(window).float().to(self.device)
+        r, c = window.shape
+        window = window.reshape(1, r, c)
+        position = torch.tensor(position).float().to(self.device)
+        return (window, position)
+
+    def add_reward(self, R_t):
+        self.saved_rewards.append(R_t)
+
+    def get_avg_reward(self):
+        return torch.mean(torch.tensor(self.saved_rewards))
+
+    def get_sum_reward(self):
+        return torch.sum(torch.tensor(self.saved_rewards))
+
+    def train(self, eps=1e-7):
+        R = torch.tensor(0).float().to(self.device)
+        returns = list()
+        self.saved_actions = torch.tensor(self.saved_actions, requires_grad=True).float().to(self.device)
+        self.saved_rewards = torch.tensor(self.saved_rewards, requires_grad=True).float().to(self.device)
+        # calculate the true value using rewards returned from the environment
+        for r in self.saved_rewards:
+            # calculate the discounted value
+            R = r + self.gamma * R
+            returns.insert(0, R)
+        returns = torch.tensor(returns, requires_grad=True).float().to(self.device)
+        returns = (returns - returns.mean()) / (returns.std() + eps)
+        policy_losses = [] # list to save actor (policy) loss
+        value_losses = [] # list to save critic (value) loss
+        for (log_prob, value), R in zip(self.saved_actions, returns):
+            advantage = R - value.item()
+            # calculate actor (policy) loss
+            policy_losses.append(-log_prob * advantage)
+            # calculate critic (value) loss 
+            value_losses.append(self.loss(value, torch.tensor([R])))
+        #policy_losses = torch.tensor(policy_losses).float().to(self.device)
+        #value_losses = torch.tensor(value_losses).float().to(self.device)
+        self.optimizer.zero_grad()
+        # sum up all the values of policy_losses and value_losses
+        loss = (torch.stack(policy_losses).to(self.device).sum() + torch.stack(value_losses).to(self.device).sum()).float()
+        # perform backprop
+        loss.backward()
+        self.optimizer.step()
+        # reset rewards and action buffer
+        self.saved_actions = list()
+        self.saved_rewards = list()
