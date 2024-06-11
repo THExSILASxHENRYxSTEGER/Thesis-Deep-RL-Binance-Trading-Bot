@@ -3,9 +3,10 @@ import torch
 from torch.optim import Adam
 from torch import nn
 from torch.distributions import Categorical
+from torch.utils.data import Dataset, DataLoader
 from copy import deepcopy
 import os
-from Data_Fetcher.global_variables import DEVICE
+from Data_Fetcher.global_variables import DEVICE, BATCH_SIZE
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -82,12 +83,9 @@ class DQN_AGENT:
         position = torch.tensor(position).float().to(self.device)
         return (window, position)
 
-    def train(self, b_s, b_a, b_r, b_d, b_s_, dqn_type="Vanilla"): # at end of function torch.cuda.empty_cache()
-        if dqn_type == "Vanilla":
-            pred = torch.sum(self.policy_net(b_s) * b_a, dim=1)
-            target = b_r + (torch.ones_like(b_d)-b_d) * self.gamma * torch.max(self.target_net(b_s_), dim=1)[0]
-        elif dqn_type == "Double":
-            pass
+    def train(self, b_s, b_a, b_r, b_d, b_s_):
+        pred = torch.sum(self.policy_net(b_s) * b_a, dim=1)
+        target = b_r + (torch.ones_like(b_d)-b_d) * self.gamma * torch.max(self.target_net(b_s_), dim=1)[0]
         loss = self.loss(pred, target)
         self.optimizer.zero_grad()
         loss.backward()
@@ -222,13 +220,15 @@ class Policy_Value(nn.Module):
 
     def __init__(self, base_model, final_layer_size, action_space) -> None:
         super(Policy_Value, self).__init__()
+        if type(base_model) == str: ############## load model
+            pass
         # base model for the policy and value function estimation 
         self.base_model = base_model
         # actor's final layers
         self.policy_layer = nn.Linear(final_layer_size, action_space)
-        self.policy_activation = nn.Softmax()
+        self.policy_activation = nn.Softmax(dim=1)
         # critic's final layer to estmate value of state
-        self.value_layer = nn.Linear(final_layer_size, 1)
+        self.value_layer = nn.Linear(final_layer_size, action_space)
 
     def forward(self, S_t):
         base_out = self.base_model(S_t)
@@ -236,28 +236,48 @@ class Policy_Value(nn.Module):
         action_prob = self.policy_activation(action_out)
         state_values = self.value_layer(base_out)
         return action_prob, state_values
+    
+class Advantages(Dataset):
+    
+    def __init__(self, q_vals, actions, rewards, log_pi, q_vals_, pi_, device=DEVICE) -> None:
+        self.q_vals = torch.stack(q_vals).float().to(device)
+        self.actions = torch.stack(actions).float().to(device)
+        self.rewards = torch.stack(rewards).float().to(device)
+        self.log_pi = torch.stack(log_pi).float().to(device)
+        self.q_vals_ = torch.stack(q_vals_).float().to(device)
+        self.pi_ = torch.stack(pi_).float().to(device)
+
+    def __len__(self):
+        return len(self.q_vals)
+    
+    def __getitem__(self, idx):
+        return self.q_vals[idx], self.actions[idx], self.rewards[idx], self.log_pi[idx], self.q_vals_[idx], self.pi_[idx]
 
 class ACTOR_CRITIC_AGENT:
 
-    def __init__(self, policy_value_func, action_space, device, gamma=0.99, loss=nn.MSELoss, optimizer=Adam) -> None:
+    def __init__(self, policy_value_func, action_space, device, gamma=0.99, optimizer=Adam) -> None:
         self.policy_value_func = policy_value_func.float().to(device)
         self.action_space = action_space
         self.device = device
-        self.saved_actions = list()
-        self.saved_rewards = list()
+        self.q_vals, self.actions, self.rewards, self.pi, self.log_pi = list(), list(), list(), list(), list()
         self.gamma = torch.tensor(gamma).float().to(self.device)
-        self.loss = loss()
+        self.q_value_loss = nn.MSELoss(reduction='sum')
         self.optimizer = optimizer(self.policy_value_func.parameters())
     
     def select_action(self, S_t):
         S_t = self.state_to_device(S_t)
-        probs, state_value = self.policy_value_func(S_t)
+        probs, q_values = self.policy_value_func(S_t)
         # create a categorical distribution over the list of probabilities of actions
         m = Categorical(probs)
         # and sample an action using the distribution
         action = m.sample()
-        # save to action buffer
-        self.saved_actions.append((m.log_prob(action), state_value))
+        one_hot = np.zeros(probs.shape)
+        one_hot[0][action.item()] = 1.0
+        one_hot = torch.from_numpy(one_hot)
+        self.actions.append(one_hot)
+        self.q_vals.append(q_values) # Agent uses action values instead of state values
+        self.pi.append(probs)
+        self.log_pi.append(m.log_prob(action))
         return action.item()
 
     def state_to_device(self, S_t):
@@ -269,42 +289,35 @@ class ACTOR_CRITIC_AGENT:
         return (window, position)
 
     def add_reward(self, R_t):
-        self.saved_rewards.append(R_t)
+        self.rewards.append(torch.tensor([R_t], requires_grad=True))
 
     def get_avg_reward(self):
-        return torch.mean(torch.tensor(self.saved_rewards))
+        return torch.mean(torch.tensor(self.rewards))
 
     def get_sum_reward(self):
-        return torch.sum(torch.tensor(self.saved_rewards))
+        return torch.sum(torch.tensor(self.rewards))
 
-    def train(self, eps=1e-7):
-        R = torch.tensor(0).float().to(self.device)
-        returns = list()
-        self.saved_actions = torch.tensor(self.saved_actions, requires_grad=True).float().to(self.device)
-        self.saved_rewards = torch.tensor(self.saved_rewards, requires_grad=True).float().to(self.device)
-        # calculate the true value using rewards returned from the environment
-        for r in self.saved_rewards:
-            # calculate the discounted value
-            R = r + self.gamma * R
-            returns.insert(0, R)
-        returns = torch.tensor(returns, requires_grad=True).float().to(self.device)
-        returns = (returns - returns.mean()) / (returns.std() + eps)
-        policy_losses = [] # list to save actor (policy) loss
-        value_losses = [] # list to save critic (value) loss
-        for (log_prob, value), R in zip(self.saved_actions, returns):
-            advantage = R - value.item()
-            # calculate actor (policy) loss
-            policy_losses.append(-log_prob * advantage)
-            # calculate critic (value) loss 
-            value_losses.append(self.loss(value, torch.tensor([R])))
-        #policy_losses = torch.tensor(policy_losses).float().to(self.device)
-        #value_losses = torch.tensor(value_losses).float().to(self.device)
-        self.optimizer.zero_grad()
-        # sum up all the values of policy_losses and value_losses
-        loss = (torch.stack(policy_losses).to(self.device).sum() + torch.stack(value_losses).to(self.device).sum()).float()
-        # perform backprop
-        loss.backward()
-        self.optimizer.step()
-        # reset rewards and action buffer
-        self.saved_actions = list()
-        self.saved_rewards = list()
+    def get_data_loader(self, batch_size):
+        data_set = Advantages(self.q_vals, self.actions, self.rewards, self.log_pi, self.q_vals_, self.pi_)
+        data_loader = DataLoader(data_set, batch_size, shuffle=True)
+        return data_loader
+
+    def train(self, batch_size=BATCH_SIZE):
+        self.q_vals_ = self.q_vals[1:]                        # q-values of the next state, so remove the first q-values in the copy and
+        self.q_vals_.append(torch.zeros_like(self.q_vals[0])) # add zero valued q-values at the end of the episode
+        self.pi_ = self.pi[1:]                                # do the same as above with the policy probabilities 
+        self.pi_.append(torch.zeros_like(self.pi[0])) 
+        batch_size = len(self.pi_)
+        data_loader = self.get_data_loader(batch_size)
+        for b_q, b_a, b_r, b_log_pi, b_q_, b_pi_ in data_loader:
+            pred = torch.sum(b_a * b_q, dim=2)
+            target = b_r + torch.sum(b_q_*b_pi_, dim=2)
+            advntgs = target-pred
+            policy_loss = (-b_log_pi.T)@advntgs
+            q_value_loss = torch.sum(torch.square(advntgs))
+            total_loss = policy_loss+q_value_loss
+            self.optimizer.zero_grad()
+            total_loss.backward()
+            self.optimizer.step()
+        torch.cuda.empty_cache()
+        self.q_vals, self.actions, self.rewards, self.pi, self.log_pi = list(), list(), list(), list(), list()
