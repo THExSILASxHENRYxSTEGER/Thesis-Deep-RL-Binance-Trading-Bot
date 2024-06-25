@@ -18,11 +18,11 @@ def compare_baselines(models:dict, interval="30m", skip_set_types=["train"]):
         Interface.plot_rtrns([buy_and_hold_rtrns[i], macd_cum_rtrns[1:], *model_rtrns], time_steps[1:], f"Average Cumulative Returns {set_type} set", False, ["Buy and Hold", "MACD", *list(models.keys())])
 
 models = {
-    "AC_no_self_play" : load_policy_value_func("AC_2_100_CNN_8_8_16_100_4_4_1_16_128_2_1", path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/AC_2_100_CNN_8_8_16_100_4_4_1_16_128_2_1/no_self_play"),
-    "DQN_CNN_no_self_play":  load_q_func("DQN_CNN_8_8_16_2_4_4_1_16_128_2_1", path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_CNN_8_8_16_2_4_4_1_16_128_2_1/no_self_play"), 
+    "AC_no_self_play" :      load_policy_value_func("AC_2_100_CNN_8_8_16_100_4_4_1_16_128_2_1", path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/AC_2_100_CNN_8_8_16_100_4_4_1_16_128_2_1/no_pretraining"),
+    #"DQN_CNN_no_self_play":  load_q_func("DQN_CNN_8_8_16_2_4_4_1_16_128_2_1", path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_CNN_8_8_16_2_4_4_1_16_128_2_1/no_self_play"), 
     "DQN_CNN_self_play":     load_q_func("DQN_CNN_8_8_16_2_4_4_1_16_128_2_1", path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_CNN_8_8_16_2_4_4_1_16_128_2_1/self_play"),
-    "DQN_LSTM_no_self_play": load_q_func("DQN_LSTM_8_32_16_2_1_128_1", path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_LSTM_8_32_16_2_1_128_1/random_actions"),
-    "DQN_LSTM_self_play":    load_q_func("DQN_LSTM_8_7_16_2_1_128_1", path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_LSTM_8_7_16_2_1_128_1"),
+    #"DQN_LSTM_no_self_play": load_q_func("DQN_LSTM_8_32_16_2_1_128_1", path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_LSTM_8_32_16_2_1_128_1/random_actions"),
+    #"DQN_LSTM_self_play":    load_q_func("DQN_LSTM_8_7_16_2_1_128_1", path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_LSTM_8_7_16_2_1_128_1"),
     }
 
 compare_baselines(models, "30m")
