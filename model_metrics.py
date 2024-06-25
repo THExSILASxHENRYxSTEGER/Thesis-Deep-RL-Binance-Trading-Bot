@@ -19,7 +19,7 @@ def model_cum_rtrns(model, agent_type, set_type="train", interval="30m"):
 
     if agent_type == "DQN":
         agent = DQN_AGENT(EPSILON, action_space, model, device=DEVICE, training=False)
-    elif agent_type == "ACTOR_CRITIC":
+    elif agent_type == "AC":
         agent = ACTOR_CRITIC_AGENT(model, action_space, device=DEVICE)
     else:
         raise RuntimeError("No proper model was given")
@@ -58,10 +58,10 @@ def model_cum_rtrns(model, agent_type, set_type="train", interval="30m"):
     return cum_rtrns
 
 if plot_cum_rtrns:
-    policy_value_func = load_policy_value_func("AC_2_100_CNN_8_8_16_100_4_4_1_16_128_2_1")
-    cum_rtrns_ac = model_cum_rtrns(policy_value_func, "ACTOR_CRITIC", set_type="test")    
     q_func = load_q_func("DQN_CNN_8_8_16_2_4_4_1_16_128_2_1", path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_CNN_8_8_16_2_4_4_1_16_128_2_1/self_play")
     cum_rtrns_dqn = model_cum_rtrns(q_func, "DQN", set_type="test") 
+    policy_value_func = load_policy_value_func("AC_2_100_CNN_8_8_16_100_4_4_1_16_128_2_1", path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/AC_2_100_CNN_8_8_16_100_4_4_1_16_128_2_1/no_self_play")
+    cum_rtrns_ac = model_cum_rtrns(policy_value_func, "AC", set_type="test")    
     plt.plot(range(len(cum_rtrns_ac)), cum_rtrns_ac)
     plt.plot(range(len(cum_rtrns_dqn)), cum_rtrns_dqn)
     plt.show()

@@ -1,6 +1,7 @@
 from data_interface import Interface
 from Data_Fetcher.global_variables import WINDOW_SIZES, TREASURY_INTEREST_API_CODES, DQN_ACTIONS, BINANCE_TRANSACTION_COST
 import numpy as np
+from copy import deepcopy
 
 class Environment:
     
@@ -70,12 +71,13 @@ class Environment:
     def get_episode_windows(self):
         return self.episodes
 
-    def reset(self):
-        self.position = DQN_ACTIONS["SELL"] # the position we are in at the moment of the episode (at the beginning of any episode we assume no investment into the currency yet)
+    def reset(self, start_selling=True, episode_nr=None):
+        self.position = DQN_ACTIONS["SELL"] if start_selling else DQN_ACTIONS["BUY"] # the position we are in at the moment of the episode (at the beginning of any episode we assume no investment into the currency yet, unless in a continuos setting where we only care about the returns )
         n, _, _, _ = self.episodes.shape
-        episode_nr = np.random.randint(0,n)
+        if episode_nr == None:
+            episode_nr = np.random.randint(0,n) 
         self.episode = self.episodes[episode_nr] # the current episode is the historic data of one ticker over the current set type
-        self.episode_idx = 0                # this is the index of the current state within the current episode
+        self.episode_idx = 0                     # this is the index of the current state within the current episode
         S_t = [self.episode[self.episode_idx], self.position] # the state is the sliding window of the economic data and the current investment position BUY or SELL
         self.episode_trnsct_cost = self.trnsctn_costs[episode_nr]
         return S_t
@@ -83,7 +85,7 @@ class Environment:
     def step(self, A_t):
         self.episode_idx += 1
         S_window = self.episode[self.episode_idx]
-        R = S_window[0][-1]
+        R = S_window[0][-1]     #########################!!!!!!!!!!!!!!!!!! check whether should be open or close possibly close
         if self.position == DQN_ACTIONS["BUY"] and A_t == DQN_ACTIONS["SELL"]:  # depending on the previous position anegative return can either be a positive reward if we sold or vice versa
             R = -R-self.episode_trnsct_cost
         elif self.position == DQN_ACTIONS["SELL"] and A_t == DQN_ACTIONS["BUY"]: 
@@ -91,6 +93,71 @@ class Environment:
         elif self.position == DQN_ACTIONS["SELL"] and A_t == DQN_ACTIONS["SELL"]: 
             R = -R 
         self.position = A_t
-        S_prime = [S_window, self.position]
+        S_prime = [S_window, deepcopy(self.position)]
         D = True if self.episode_idx+1 == self.episode.shape[0] else False
-        return S_prime, R, D
+        return S_prime, deepcopy(R), D
+
+class ENVIRONMENT_DDPG(Environment):
+
+    def __init__(self, intfc, set_type="train", interval="1h", prcs_included=["open", "high", "low", "close"], other_cols=["volume"], make_rtrns=True, normalize=True, n_root=None, consider_trnsctn_cost=True) -> None:
+        super().__init__(intfc, set_type, interval, prcs_included, other_cols, make_rtrns, normalize)
+        self.n_common_vars = len(prcs_included)+len(other_cols) # variables that are not macroeconomic
+        self.n_root = n_root
+        self.consider_trnsctn_cost = consider_trnsctn_cost
+        if n_root != None:
+            self.reward_manipulation = np.vectorize(lambda x: x**(1/n_root) if x >= 0 else -np.abs(x)**(1/n_root))
+            self.trnsctn_costs = self.reward_manipulation(np.array(self.trnsctn_costs)).tolist()
+        self.trnsctn_costs = np.hstack((self.trnsctn_costs, np.mean(self.trnsctn_costs)))
+        self.n_crncs, self.n_steps, _, _ = self.episodes.shape 
+        windows = list()
+        for i in range(self.n_steps):
+            window = self.__rescale_rtrns_and_trnsctn_csts(self.episodes[:,i,:,:])
+            windows.append(window)
+        self.episode = np.array(windows)
+        del self.episodes
+
+    def __rescale_rtrns_and_trnsctn_csts(self, windows): # take root of all rtrns and transaction costs 
+        economic_data = deepcopy(windows[0][self.n_common_vars:])
+        time_series = list()
+        for window in windows:
+            window_ = window[:self.n_common_vars]
+            if self.n_root != None:
+                window_ = self.reward_manipulation(window_)
+            time_series.append(window_)
+        time_series.append(economic_data)
+        return np.vstack(time_series)
+ 
+    def reset(self):
+        self.episode_idx = 0
+        window = self.episode[self.episode_idx]
+        self.pf_weights = np.zeros(self.n_crncs+1) # keep account of the portfolio weights
+        self.pf_weights[self.n_crncs] = 1.0
+        S_t = (window, deepcopy(self.pf_weights))
+        return S_t
+    
+    def step(self, A_ts): # A_ts is here a vector of new weights
+        self.episode_idx += 1
+        window = self.episode[self.episode_idx]
+        rtrns =  window[np.array(range(self.n_crncs))*self.n_common_vars][:,-1]
+        neg_rtrn_indcs = np.where(rtrns<0)[0]
+        if len(neg_rtrn_indcs) == 0 or len(neg_rtrn_indcs) == self.n_crncs:
+            hold_rtrn = -np.sum(rtrns)
+        else:
+            hold_rtrn = np.mean(rtrns[neg_rtrn_indcs])
+        rtrns = np.hstack((rtrns, hold_rtrn))
+        R_t = rtrns*A_ts
+        weight_change = A_ts-self.pf_weights
+        if self.consider_trnsctn_cost:
+            neg_change_indcs = np.where(weight_change <= 0)[0]
+            pos_trnsctn_cost = deepcopy(self.trnsctn_costs)
+            pos_trnsctn_cost[neg_change_indcs] = 0
+            step_trnsctn_csts = pos_trnsctn_cost*weight_change
+            R_t = R_t-step_trnsctn_csts
+        self.pf_weights = A_ts
+        S_t = (window, self.pf_weights)
+        D = True if self.episode_idx+1 == self.episode.shape[0] else False
+        return S_t, R_t, D
+    
+    def get_action_space(self):
+        return self.n_crncs+1
+

@@ -14,7 +14,8 @@ episodes, episode_len, data_cols, window_len = env.episodes.shape
 action_space = len(DQN_ACTIONS)
 
 q_func_type = "CNN"
-actor_critic_func_name = None # "AC_2_100_CNN_8_8_16_100_4_4_1_16_128_2_1"
+actor_critic_func_name = "DQN_CNN_8_8_16_2_4_4_1_16_128_2_1" # "AC_2_100_CNN_8_8_16_100_4_4_1_16_128_2_1" # None #
+actor_critic_func_name_path = "/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_CNN_8_8_16_2_4_4_1_16_128_2_1/self_play/" # "/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/AC_2_100_CNN_8_8_16_100_4_4_1_16_128_2_1/no_pretraining/"
 
 if actor_critic_func_name == None:
     model_parameters = {"in_chnls":data_cols, "out_chnls":data_cols, "time_series_len":window_len, "final_layer_size":100, "n_cnn_layers":4, 
@@ -26,7 +27,7 @@ if actor_critic_func_name == None:
     str_vals = "_".join([str(param) for param in model_parameters.values()])
     actor_critic_func_name = f"AC_{action_space}_{final_layer_size}_{q_func_type}_{str_vals}"
 else:
-    policy_value_func = load_policy_value_func(actor_critic_func_name, eval=False)
+    policy_value_func = load_policy_value_func(actor_critic_func_name, path=actor_critic_func_name_path, eval=False)
 
 agent = ACTOR_CRITIC_AGENT(policy_value_func, action_space, DEVICE)
 
@@ -42,6 +43,8 @@ for n_episode in range(n_episodes):
         A_t = agent.select_action(S_t)
         S_t, R_t, D_t = env.step(A_t)
         agent.add_reward(R_t)
+        if env.episode_idx > 1000:
+            break
     avg_ep_reward = agent.get_avg_reward()
     sum_ep_reward = agent.get_sum_reward()
     avg_rewards.append(avg_ep_reward)
