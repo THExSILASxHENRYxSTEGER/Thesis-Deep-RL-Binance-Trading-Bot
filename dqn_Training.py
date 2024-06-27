@@ -78,7 +78,8 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":200}, {"q_func_type":"L
                 sum_rewards.append(sum_r)
                 avg_r = np.mean(episode_rewards)
                 avg_rewards.append(avg_r)
-                print(f"Episode: {n_episode}, Timesteps: {n_steps}, sum reward: {sum_r}, avg reward: {avg_r}")
+                model_name = f"{q_func_type}_{int(10*explore_frac)}_{int(100*gamma)}"
+                print(f"Model:{model_name}, Episode: {n_episode}, Timesteps: {n_steps}, sum reward: {sum_r}, avg reward: {avg_r}")
                 break
 
             model_dir = os.path.join(__file__.replace("/dqn_Training.py", ""), "Models", f"DQN_{q_func_type}_explore_{int(10*explore_frac)}_gamma_{int(100*gamma)}")
