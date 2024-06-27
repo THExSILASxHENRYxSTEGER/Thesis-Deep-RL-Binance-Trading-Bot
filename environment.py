@@ -85,7 +85,7 @@ class Environment:
     def step(self, A_t):
         self.episode_idx += 1
         S_window = self.episode[self.episode_idx]
-        R = S_window[0][-1]     #########################!!!!!!!!!!!!!!!!!! check whether should be open or close possibly close
+        R = S_window[3][-1]     #########################!!!!!!!!!!!!!!!!!! check whether should be open or close possibly close
         if self.position == DQN_ACTIONS["BUY"] and A_t == DQN_ACTIONS["SELL"]:  # depending on the previous position anegative return can either be a positive reward if we sold or vice versa
             R = -R-self.episode_trnsct_cost
         elif self.position == DQN_ACTIONS["SELL"] and A_t == DQN_ACTIONS["BUY"]: 
