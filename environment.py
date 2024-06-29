@@ -1,5 +1,5 @@
 from data_interface import Interface
-from Data_Fetcher.global_variables import WINDOW_SIZES, TREASURY_INTEREST_API_CODES, DQN_ACTIONS, BINANCE_TRANSACTION_COST
+from Data_Fetcher.global_variables import WINDOW_SIZES, TREASURY_INTEREST_API_CODES, DQN_ACTIONS, BINANCE_TRANSACTION_COST, TICKERS
 import numpy as np
 from copy import deepcopy
 
@@ -75,11 +75,15 @@ class Environment:
         self.position = DQN_ACTIONS["SELL"] if start_selling else DQN_ACTIONS["BUY"] # the position we are in at the moment of the episode (at the beginning of any episode we assume no investment into the currency yet, unless in a continuos setting where we only care about the returns )
         n, _, _, _ = self.episodes.shape
         if episode_nr == None:
-            episode_nr = np.random.randint(0,n) 
-        self.episode = self.episodes[episode_nr] # the current episode is the historic data of one ticker over the current set type
+            self.episode_nr = np.random.randint(0,n) 
+        else:
+            self.episode_nr = episode_nr
+        self.episode = self.episodes[self.episode_nr] # the current episode is the historic data of one ticker over the current set type
         self.episode_idx = 0                     # this is the index of the current state within the current episode
-        S_t = [self.episode[self.episode_idx], self.position] # the state is the sliding window of the economic data and the current investment position BUY or SELL
-        self.episode_trnsct_cost = self.trnsctn_costs[episode_nr]
+        self.episode_one_hot = np.zeros(len(TICKERS)).tolist()
+        self.episode_one_hot[self.episode_nr] = 1.0
+        S_t = [self.episode[self.episode_idx], np.array([self.position, *self.episode_one_hot])] # the state is the sliding window of the economic data and the current investment position BUY or SELL
+        self.episode_trnsct_cost = self.trnsctn_costs[self.episode_nr]
         return S_t
 
     def step(self, A_t):
@@ -93,7 +97,7 @@ class Environment:
         elif self.position == DQN_ACTIONS["SELL"] and A_t == DQN_ACTIONS["SELL"]: 
             R = -R 
         self.position = A_t
-        S_prime = [S_window, deepcopy(self.position)]
+        S_prime = [S_window, np.array([deepcopy(self.position), *self.episode_one_hot])]
         D = True if self.episode_idx+1 == self.episode.shape[0] else False
         return S_prime, deepcopy(R), D
 
@@ -109,11 +113,10 @@ class ENVIRONMENT_DDPG(Environment):
             self.trnsctn_costs = self.reward_manipulation(np.array(self.trnsctn_costs)).tolist()
         self.trnsctn_costs = np.hstack((self.trnsctn_costs, np.mean(self.trnsctn_costs)))
         self.n_crncs, self.n_steps, _, _ = self.episodes.shape 
-        windows = list()
+        self.windows = list()
         for i in range(self.n_steps):
             window = self.__rescale_rtrns_and_trnsctn_csts(self.episodes[:,i,:,:])
-            windows.append(window)
-        self.episode = np.array(windows)
+            self.windows.append(window)
         del self.episodes
 
     def __rescale_rtrns_and_trnsctn_csts(self, windows): # take root of all rtrns and transaction costs 
@@ -125,14 +128,14 @@ class ENVIRONMENT_DDPG(Environment):
                 window_ = self.reward_manipulation(window_)
             time_series.append(window_)
         time_series.append(economic_data)
-        return np.vstack(time_series)
+        return time_series
  
     def reset(self):
         self.episode_idx = 0
-        window = self.episode[self.episode_idx]
-        self.pf_weights = np.zeros(self.n_crncs+1) # keep account of the portfolio weights
+        windows = self.windows[self.episode_idx]
+        self.pf_weights = np.zeros(self.n_crncs+1) 
         self.pf_weights[self.n_crncs] = 1.0
-        S_t = (window, deepcopy(self.pf_weights))
+        S_t = (windows, deepcopy(self.pf_weights))
         return S_t
     
     def step(self, A_ts): # A_ts is here a vector of new weights

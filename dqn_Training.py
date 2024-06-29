@@ -1,7 +1,7 @@
 from data_interface import Interface
 from environment import Environment
 from RL_utils import DQN_AGENT, ReplayBuffer, CNN, LSTM, load_q_func
-from Data_Fetcher.global_variables import EPSILON, TARGET_UPDATE_FREQUENCY, TRAINING_FREQUENCY, BATCH_SIZE, WARM_START, DQN_ACTIONS, DEVICE, N_EPIODES
+from Data_Fetcher.global_variables import EPSILON, TARGET_UPDATE_FREQUENCY, TRAINING_FREQUENCY, BATCH_SIZE, WARM_START, DQN_ACTIONS, DEVICE, N_EPIODES, TICKERS
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -10,16 +10,16 @@ from copy import deepcopy
 
 self_play = True # if true create two agents, one that performs the opposite action to the current agents but both actions come into the replay buffer
 
-for q_func_params in [{"q_func_type":"CNN", "n_episodes":200}, {"q_func_type":"LSTM", "n_episodes":150}]:
-    for explore_frac in [0.2, 0.4, 0.6]:
-        for gamma in [0.99, 0.75, 0.5]:
+for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"LSTM", "n_episodes":200}]:
+    for explore_frac in [0.15, 0.3, 0.45]:
+        for gamma in [0.33, 0.66, 0.99]:
 
             N_EPIODES = q_func_params["n_episodes"]
             EXPLORE_FRAC = explore_frac
             EPSILON = lambda i: 1 - 0.999999 * min(1, i/(N_EPIODES * EXPLORE_FRAC))
 
             intfc = Interface()
-            env = Environment(intfc, interval="30m")
+            env = Environment(intfc, interval="1h")
 
             episodes, episode_len, data_cols, window_len = env.episodes.shape
 
@@ -32,8 +32,8 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":200}, {"q_func_type":"L
                 q_func = load_q_func(model_q_func_name, eval=False, path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_CNN_8_8_16_2_4_4_1_16_128_2_1/self_play")
             else:
                 if q_func_type == "CNN":
-                    model_parameters = {"in_chnls":data_cols, "out_chnls":data_cols, "time_series_len":window_len, "final_layer_size":action_space, "n_cnn_layers":4, "kernel_size":4, 
-                                        "kernel_div":1, "cnn_intermed_chnls":16, "mlp_intermed_size":128, "n_mlp_layers":2, "punctual_vals":1}
+                    model_parameters = {"in_chnls":data_cols, "out_chnls":32, "time_series_len":window_len, "final_layer_size":action_space, "n_cnn_layers":4, "kernel_size":4, 
+                                        "kernel_div":1, "cnn_intermed_chnls":32, "mlp_intermed_size":128, "n_mlp_layers":2, "punctual_vals":1+len(TICKERS)}
                     cnn_layers, mlp_layers = CNN.create_conv1d_layers(**model_parameters) 
                     q_func = CNN(cnn_layers, mlp_layers)
                 else:
@@ -73,14 +73,14 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":200}, {"q_func_type":"L
                     if n_steps % TARGET_UPDATE_FREQUENCY == 0:
                         agent.update_target_net()
                     n_steps += 1
-                    break
+                    
                 sum_r = np.sum(episode_rewards)
                 sum_rewards.append(sum_r)
                 avg_r = np.mean(episode_rewards)
                 avg_rewards.append(avg_r)
                 model_name = f"{q_func_type}_{int(10*explore_frac)}_{int(100*gamma)}"
                 print(f"Model:{model_name}, Episode: {n_episode}, Timesteps: {n_steps}, sum reward: {sum_r}, avg reward: {avg_r}")
-                break
+                
 
             model_dir = os.path.join(__file__.replace("/dqn_Training.py", ""), "Models", f"DQN_{q_func_type}_explore_{int(10*explore_frac)}_gamma_{int(100*gamma)}")
             os.mkdir(model_dir)
