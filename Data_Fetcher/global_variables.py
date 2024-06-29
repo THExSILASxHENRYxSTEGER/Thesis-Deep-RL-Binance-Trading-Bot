@@ -44,11 +44,11 @@ SET_TYPE_ENCODING = {
 
 BINANCE_TRANSACTION_COST = 0.001 # Binance cost of making a trade
 
-MAX_STAKE = 1/5 # maximum percentage of the portfolio that can be invested in any one currency, in this case 20 %
+MAX_STAKE = 0.99 # maximum percentage of the portfolio that can be invested in any one currency, in this case 20 %
 
 A_THRESHOLD = 0.51 # once the action value is above this number (a_t in [-1,1]) we buy
 
-HOURS_TO_LOOK_BACK = 8
+HOURS_TO_LOOK_BACK = 24
 
 WINDOW_SIZES = {
     "5m" :int((60/5)*HOURS_TO_LOOK_BACK),
