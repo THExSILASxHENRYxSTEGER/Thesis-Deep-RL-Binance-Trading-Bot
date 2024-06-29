@@ -12,7 +12,7 @@ self_play = True # if true create two agents, one that performs the opposite act
 
 for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"LSTM", "n_episodes":200}]:
     for explore_frac in [0.15, 0.3, 0.45]:
-        for gamma in [0.33, 0.66, 0.99]:
+        for gamma in reversed([0.33, 0.66, 0.99]):
 
             N_EPIODES = q_func_params["n_episodes"]
             EXPLORE_FRAC = explore_frac
@@ -32,8 +32,8 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"L
                 q_func = load_q_func(model_q_func_name, eval=False, path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_CNN_8_8_16_2_4_4_1_16_128_2_1/self_play")
             else:
                 if q_func_type == "CNN":
-                    model_parameters = {"in_chnls":data_cols, "out_chnls":32, "time_series_len":window_len, "final_layer_size":action_space, "n_cnn_layers":4, "kernel_size":4, 
-                                        "kernel_div":1, "cnn_intermed_chnls":32, "mlp_intermed_size":128, "n_mlp_layers":2, "punctual_vals":1+len(TICKERS)}
+                    model_parameters = {"in_chnls":data_cols, "out_chnls":512, "time_series_len":window_len, "final_layer_size":action_space, "n_cnn_layers":4, "kernel_size":4, 
+                                        "kernel_div":1, "cnn_intermed_chnls":256, "mlp_intermed_size":512, "n_mlp_layers":3, "punctual_vals":1+len(TICKERS)}
                     cnn_layers, mlp_layers = CNN.create_conv1d_layers(**model_parameters) 
                     q_func = CNN(cnn_layers, mlp_layers)
                 else:

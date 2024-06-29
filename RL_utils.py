@@ -77,7 +77,7 @@ class DQN_AGENT:
             S_t = self.state_to_device(S_t)
             A_t = torch.argmax(self.policy_net(S_t))
             torch.cuda.empty_cache()
-            return A_t
+            return A_t.cpu()
         
     def state_to_device(self, S_t):
         window, position = S_t
