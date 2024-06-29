@@ -70,7 +70,7 @@ class DQN_AGENT:
             self.optimizer = optimizer(self.policy_net.parameters())
             self.loss = loss()
 
-    def select_action(self, S_t, n_episode):
+    def select_action(self, S_t, n_episode, ):
         if self.eps(n_episode) > np.random.rand() and self.training: #>
             return np.argmax(np.random.rand(self.action_space))
         else:
@@ -130,7 +130,7 @@ class CNN(nn.Module):
         cnn_out = torch.flatten(cnn_out, start_dim=1)
         if self.mlp == None:
             return cnn_out
-        mlp_in = torch.concat((cnn_out, torch.atleast_2d(position).T), dim=1)
+        mlp_in = torch.concat((cnn_out, torch.atleast_2d(position)), dim=1)
         return self.mlp(mlp_in)
 
     @staticmethod
