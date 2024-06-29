@@ -33,11 +33,11 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"L
             else:
                 if q_func_type == "CNN":
                     model_parameters = {"in_chnls":data_cols, "out_chnls":512, "time_series_len":window_len, "final_layer_size":action_space, "n_cnn_layers":4, "kernel_size":4, 
-                                        "kernel_div":1, "cnn_intermed_chnls":256, "mlp_intermed_size":512, "n_mlp_layers":3, "punctual_vals":1+len(TICKERS)}
+                                        "kernel_div":1, "cnn_intermed_chnls":256, "mlp_intermed_size":1024, "n_mlp_layers":4, "punctual_vals":1+len(TICKERS)}
                     cnn_layers, mlp_layers = CNN.create_conv1d_layers(**model_parameters) 
                     q_func = CNN(cnn_layers, mlp_layers)
                 else:
-                    model_parameters = {"in_sz":data_cols, "h_sz":16, "n_lstm_lyrs":window_len, "final_layer_size":action_space, "n_mlp_lyrs":2, "mlp_intermed_size":128, "punctual_vals":1}
+                    model_parameters = {"in_sz":data_cols, "h_sz":128, "n_lstm_lyrs":window_len, "final_layer_size":action_space, "n_mlp_lyrs":4, "mlp_intermed_size":512, "punctual_vals":1+len(TICKERS)}
                     q_func = LSTM(**model_parameters)
                 str_vals = "_".join([str(param) for param in model_parameters.values()])
                 model_q_func_name = f"DQN_{q_func_type}_{str_vals}"
@@ -45,7 +45,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"L
             agent = DQN_AGENT(EPSILON, action_space, q_func, DEVICE, gamma=gamma)
             buffer = ReplayBuffer(int(episodes*episode_len), BATCH_SIZE, DEVICE, action_space)
 
-            sum_rewards, avg_rewards = list(), list()
+            sum_rewards, avg_rewards, crcns = list(), list(), list()
 
             n_steps = 0
             for n_episode in range(N_EPIODES):
@@ -73,16 +73,15 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"L
                     if n_steps % TARGET_UPDATE_FREQUENCY == 0:
                         agent.update_target_net()
                     n_steps += 1
-                    
                 sum_r = np.sum(episode_rewards)
                 sum_rewards.append(sum_r)
                 avg_r = np.mean(episode_rewards)
                 avg_rewards.append(avg_r)
-                model_name = f"{q_func_type}_{int(10*explore_frac)}_{int(100*gamma)}"
-                print(f"Model:{model_name}, Episode: {n_episode}, Timesteps: {n_steps}, sum reward: {sum_r}, avg reward: {avg_r}")
-                
+                crcns.append(env.episode_nr)
+                model_name = f"{q_func_type}_{int(100*explore_frac)}_{int(100*gamma)}"
+                print(f"Model:{model_name}, crncy {TICKERS[env.episode_nr]}, Episode: {n_episode}, Timesteps: {n_steps}, sum reward: {sum_r}, avg reward: {avg_r}")
 
-            model_dir = os.path.join(__file__.replace("/dqn_Training.py", ""), "Models", f"DQN_{q_func_type}_explore_{int(10*explore_frac)}_gamma_{int(100*gamma)}")
+            model_dir = os.path.join(__file__.replace("/dqn_Training.py", ""), "Models", f"DQN_{q_func_type}_explore_{int(100*explore_frac)}_gamma_{int(100*gamma)}")
             os.mkdir(model_dir)
             
             model_path = os.path.join(model_dir, model_q_func_name)
@@ -103,3 +102,6 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"L
 
             avg_rewards_path = os.path.join(model_dir, "avg_rewards")
             torch.save(torch.tensor(avg_rewards), avg_rewards_path)
+
+            crcns_path = os.path.join(model_dir, "crncs")
+            torch.save(torch.tensor(crcns), crcns_path)
