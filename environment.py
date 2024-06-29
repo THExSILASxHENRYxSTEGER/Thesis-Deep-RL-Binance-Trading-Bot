@@ -80,9 +80,7 @@ class Environment:
             self.episode_nr = episode_nr
         self.episode = self.episodes[self.episode_nr] # the current episode is the historic data of one ticker over the current set type
         self.episode_idx = 0                     # this is the index of the current state within the current episode
-        self.episode_one_hot = np.zeros(len(TICKERS)).tolist()
-        self.episode_one_hot[self.episode_nr] = 1.0
-        S_t = [self.episode[self.episode_idx], np.array([self.position, *self.episode_one_hot])] # the state is the sliding window of the economic data and the current investment position BUY or SELL
+        S_t = [self.episode[self.episode_idx], np.array(self.position)] # the state is the sliding window of the economic data and the current investment position BUY or SELL
         self.episode_trnsct_cost = self.trnsctn_costs[self.episode_nr]
         return S_t
 
@@ -97,7 +95,7 @@ class Environment:
         elif self.position == DQN_ACTIONS["SELL"] and A_t == DQN_ACTIONS["SELL"]: 
             R = -R 
         self.position = A_t
-        S_prime = [S_window, np.array([deepcopy(self.position), *self.episode_one_hot])]
+        S_prime = [S_window, np.array(deepcopy(self.position))]
         D = True if self.episode_idx+1 == self.episode.shape[0] else False
         return S_prime, deepcopy(R), D
 

@@ -32,12 +32,12 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"L
                 q_func = load_q_func(model_q_func_name, eval=False, path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_CNN_8_8_16_2_4_4_1_16_128_2_1/self_play")
             else:
                 if q_func_type == "CNN":
-                    model_parameters = {"in_chnls":data_cols, "out_chnls":512, "time_series_len":window_len, "final_layer_size":action_space, "n_cnn_layers":4, "kernel_size":4, 
-                                        "kernel_div":1, "cnn_intermed_chnls":256, "mlp_intermed_size":1024, "n_mlp_layers":4, "punctual_vals":1+len(TICKERS)}
+                    model_parameters = {"in_chnls":data_cols, "out_chnls":64, "time_series_len":window_len, "final_layer_size":action_space, "n_cnn_layers":4, "kernel_size":4, 
+                                        "kernel_div":1, "cnn_intermed_chnls":64, "mlp_intermed_size":128, "n_mlp_layers":3, "punctual_vals":1}
                     cnn_layers, mlp_layers = CNN.create_conv1d_layers(**model_parameters) 
                     q_func = CNN(cnn_layers, mlp_layers)
                 else:
-                    model_parameters = {"in_sz":data_cols, "h_sz":128, "n_lstm_lyrs":window_len, "final_layer_size":action_space, "n_mlp_lyrs":4, "mlp_intermed_size":512, "punctual_vals":1+len(TICKERS)}
+                    model_parameters = {"in_sz":data_cols, "h_sz":128, "n_lstm_lyrs":window_len, "final_layer_size":action_space, "n_mlp_lyrs":4, "mlp_intermed_size":512, "punctual_vals":1}
                     q_func = LSTM(**model_parameters)
                 str_vals = "_".join([str(param) for param in model_parameters.values()])
                 model_q_func_name = f"DQN_{q_func_type}_{str_vals}"
@@ -49,10 +49,10 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"L
 
             n_steps = 0
             for n_episode in range(N_EPIODES):
-                S_t = env.reset()
+                S_t = env.reset(episode_nr=1)
                 if self_play:
                     env_2, S_t_2 = deepcopy(env), deepcopy(S_t)
-                D_t =  False
+                D_t = False
                 episode_rewards = list()
                 while not D_t:                            
                     A_t = agent.select_action(S_t, n_episode)
@@ -105,3 +105,4 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"L
 
             crcns_path = os.path.join(model_dir, "crncs")
             torch.save(torch.tensor(crcns), crcns_path)
+            exit()

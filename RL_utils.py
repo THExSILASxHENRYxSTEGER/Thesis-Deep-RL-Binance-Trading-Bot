@@ -130,7 +130,7 @@ class CNN(nn.Module):
         cnn_out = torch.flatten(cnn_out, start_dim=1)
         if self.mlp == None:
             return cnn_out
-        mlp_in = torch.concat((cnn_out, torch.atleast_2d(position)), dim=1)
+        mlp_in = torch.concat((cnn_out, torch.atleast_2d(position).T), dim=1)
         return self.mlp(mlp_in)
 
     @staticmethod
