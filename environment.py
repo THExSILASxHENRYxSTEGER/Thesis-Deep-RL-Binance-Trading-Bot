@@ -98,6 +98,28 @@ class Environment:
         S_prime = [S_window, np.array(deepcopy(self.position))]
         D = True if self.episode_idx+1 == self.episode.shape[0] else False
         return S_prime, deepcopy(R), D
+    
+class Simple_Env(Environment):
+    
+    def reset(self, start_selling=True, episode_nr=None):
+        n, _, _, _ = self.episodes.shape
+        if episode_nr == None:
+            self.episode_nr = np.random.randint(0,n) 
+        else:
+            self.episode_nr = episode_nr
+        self.episode = self.episodes[self.episode_nr] # the current episode is the historic data of one ticker over the current set type
+        self.episode_idx = 0                     # this is the index of the current state within the current episode
+        S_t = self.episode[self.episode_idx] # the state is the sliding window of the economic data and the current investment position BUY or SELL
+        return S_t
+    
+    def step(self, A_t):
+        self.episode_idx += 1
+        S_prime = self.episode[self.episode_idx]
+        R = S_prime[3][-1]     #########################!!!!!!!!!!!!!!!!!! check whether should be open or close possibly close
+        if A_t == DQN_ACTIONS["SELL"]:  # depending on the previous position anegative return can either be a positive reward if we sold or vice versa
+            R = -R
+        D = True if self.episode_idx+1 == self.episode.shape[0] else False
+        return S_prime, deepcopy(R), D
 
 class ENVIRONMENT_DDPG(Environment):
 

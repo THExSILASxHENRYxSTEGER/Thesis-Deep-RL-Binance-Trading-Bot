@@ -55,6 +55,27 @@ class ReplayBuffer:
         b_pos_ = torch.tensor(np.array(b_pos_)).float().to(self.device)
         return (b_wndws, b_pos), b_a, b_r, b_d, (b_wndws_, b_pos_)
 
+class ReplayBuffer_simple(ReplayBuffer):
+
+    def get_batch(self, one_hot_actions=True):
+        b_s , b_a, b_r, b_d, b_s_ = list(), list(), list(), list(), list()
+        for idx in np.random.randint(0, len(self.buffer), (self.batch_size,)):
+            s, a, r, d, s_ = self.buffer[idx]
+            b_s.append(s)
+            b_a.append(a) # implement entire loop only with torch ie optimize
+            b_r.append(r)
+            b_d.append(d)
+            b_s_.append(s_)
+        b_s = torch.tensor(np.array(b_s)).float().to(self.device)
+        if one_hot_actions:
+            b_a = torch.eye(self.action_space)[np.array(b_a)].float().to(self.device)
+        else:
+            b_a = torch.tensor(np.array(b_a)).float().to(self.device)
+        b_r = torch.tensor(np.array(b_r)).float().to(self.device)
+        b_d = torch.tensor(np.array(b_d)).float().to(self.device)
+        b_s_ = torch.tensor(np.array(b_s_)).float().to(self.device)
+        return b_s, b_a, b_r, b_d, b_s_
+    
 class DQN_AGENT:
 
     def __init__(self, eps, action_space, network, device, gamma=0.99, optimizer=Adam, loss=nn.MSELoss, training=True) -> None:
@@ -90,6 +111,71 @@ class DQN_AGENT:
     def train(self, b_s, b_a, b_r, b_d, b_s_):
         pred = torch.sum(self.policy_net(b_s) * b_a, dim=1)
         target = b_r + (torch.ones_like(b_d)-b_d) * self.gamma * torch.max(self.target_net(b_s_), dim=1)[0]
+        loss = self.loss(pred, target)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        torch.cuda.empty_cache()
+        return loss 
+
+    def update_target_net(self):
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.target_net.eval()
+
+
+class small_q_func(nn.Module):
+
+    def __init__(self, in_chnls, action_space) -> None:
+        super().__init__()
+        self.cnn = nn.Sequential(
+            nn.Conv1d(in_chnls, 2, 3, padding=1),
+            nn.Conv1d(2, 1, 3, padding=1)
+        )
+        self.mlp = nn.Sequential(
+            nn.Linear(24, 128),
+            nn.LeakyReLU(),
+            nn.Linear(128, 256),
+            nn.LeakyReLU(),
+            nn.Linear(256, action_space))
+        
+    def forward(self, S_t):
+        cnn_out = self.cnn(S_t)
+        mlp_out = self.mlp(cnn_out)
+        return mlp_out
+
+class DQN_AGENT_2:
+
+    def __init__(self, eps, action_space, network, device, gamma=0.99, optimizer=Adam, loss=nn.MSELoss, training=True) -> None:
+        self.eps = eps
+        self.action_space = action_space
+        self.device = device
+        self.gamma = torch.tensor(gamma).to(self.device)
+        self.training = training
+        self.policy_net = network.float().to(self.device)
+        self.target_net = deepcopy(network).float().to(self.device)
+        self.update_target_net()
+        if self.training:
+            self.optimizer = optimizer(self.policy_net.parameters())
+            self.loss = loss()
+
+    def select_action(self, S_t, n_episode):
+        if self.eps(n_episode) > np.random.rand() and self.training: #>
+            return np.argmax(np.random.rand(self.action_space))
+        else:
+            S_t = self.state_to_device(S_t)
+            A_t = torch.argmax(self.policy_net(S_t))
+            torch.cuda.empty_cache()
+            return A_t.cpu()
+        
+    def state_to_device(self, S_t):
+        #r, c = S_t.shape
+        #S_t = S_t.reshape(1, r, c)
+        S_t = torch.tensor(S_t).float().to(self.device)
+        return S_t
+
+    def train(self, b_s, b_a, b_r, b_d, b_s_):
+        pred = torch.sum(torch.squeeze(self.policy_net(b_s)) * b_a, dim=1)
+        target = b_r + (torch.ones_like(b_d)-b_d) * self.gamma * torch.max(torch.squeeze(self.target_net(b_s_)), dim=1)[0]
         loss = self.loss(pred, target)
         self.optimizer.zero_grad()
         loss.backward()
