@@ -10,8 +10,8 @@ from copy import deepcopy
 
 self_play = True # if true create two agents, one that performs the opposite action to the current agents but both actions come into the replay buffer
 
-for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"LSTM", "n_episodes":200}]:
-    for explore_frac in [0.15, 0.3, 0.45]:
+for q_func_params in [{"q_func_type":"CNN", "n_episodes":100}, {"q_func_type":"LSTM", "n_episodes":200}]:
+    for explore_frac in reversed([0.15, 0.3, 0.45]):
         for gamma in reversed([0.33, 0.66, 0.99]):
 
             N_EPIODES = q_func_params["n_episodes"]
@@ -45,7 +45,10 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"L
             agent = DQN_AGENT(EPSILON, action_space, q_func, DEVICE, gamma=gamma)
             buffer = ReplayBuffer(int(episodes*episode_len), BATCH_SIZE, DEVICE, action_space)
 
-            sum_rewards, avg_rewards, crcns = list(), list(), list()
+            sum_rewards, avg_rewards = list(), list()
+
+            maximum = -float("inf")
+            best_weights = deepcopy(agent.policy_net.state_dict())
 
             n_steps = 0
             for n_episode in range(N_EPIODES):
@@ -74,10 +77,12 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"L
                         agent.update_target_net()
                     n_steps += 1
                 sum_r = np.sum(episode_rewards)
+                if sum_r > maximum:
+                    maximum = sum_r
+                    best_weights = deepcopy(agent.policy_net.state_dict())
                 sum_rewards.append(sum_r)
                 avg_r = np.mean(episode_rewards)
                 avg_rewards.append(avg_r)
-                crcns.append(env.episode_nr)
                 model_name = f"{q_func_type}_{int(100*explore_frac)}_{int(100*gamma)}"
                 print(f"Model:{model_name}, crncy {TICKERS[env.episode_nr]}, Episode: {n_episode}, Timesteps: {n_steps}, sum reward: {sum_r}, avg reward: {avg_r}")
 
@@ -85,7 +90,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"L
             os.mkdir(model_dir)
             
             model_path = os.path.join(model_dir, model_q_func_name)
-            torch.save(agent.policy_net.state_dict(), model_path)
+            torch.save(best_weights, model_path)
 
             #plt.plot(range(len(sum_rewards)), sum_rewards)
             #plt.xlabel("episode")
@@ -102,7 +107,3 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":300}, {"q_func_type":"L
 
             avg_rewards_path = os.path.join(model_dir, "avg_rewards")
             torch.save(torch.tensor(avg_rewards), avg_rewards_path)
-
-            crcns_path = os.path.join(model_dir, "crncs")
-            torch.save(torch.tensor(crcns), crcns_path)
-            exit()
