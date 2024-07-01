@@ -128,8 +128,10 @@ class small_q_func(nn.Module):
     def __init__(self, in_chnls, action_space) -> None:
         super().__init__()
         self.cnn = nn.Sequential(
-            nn.Conv1d(in_chnls, 2, 3, padding=1),
-            nn.Conv1d(2, 1, 3, padding=1)
+            nn.Conv1d(in_chnls, 6, 3, padding=1),
+            nn.LeakyReLU(),
+            nn.Conv1d(6, 1, 3, padding=1),
+            nn.LeakyReLU()
         )
         self.mlp = nn.Sequential(
             nn.Linear(24, 128),
