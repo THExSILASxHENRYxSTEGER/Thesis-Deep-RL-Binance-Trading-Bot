@@ -10,7 +10,7 @@ from copy import deepcopy
 
 self_play = True # if true create two agents, one that performs the opposite action to the current agents but both actions come into the replay buffer
 
-for q_func_params in [{"q_func_type":"CNN", "n_episodes":100}, {"q_func_type":"LSTM", "n_episodes":200}]:
+for q_func_params in [{"q_func_type":"CNN", "n_episodes":150}, {"q_func_type":"LSTM", "n_episodes":200}]:
     for explore_frac in reversed([0.15, 0.3, 0.45]):
         for gamma in reversed([0.33, 0.66, 0.99]):
 
@@ -65,13 +65,14 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":100}, {"q_func_type":"L
                 if sum_r > maximum:
                     maximum = sum_r
                     best_weights = deepcopy(agent.policy_net.state_dict())
+                    print("Change saved weights")
                 sum_rewards.append(sum_r)
                 avg_r = np.mean(episode_rewards)
                 avg_rewards.append(avg_r)
                 model_name = f"DQN_CNN_{int(100*explore_frac)}_{int(100*gamma)}"
                 print(f"Model:{model_name}, crncy {TICKERS[env.episode_nr]}, Episode: {n_episode}, Timesteps: {n_steps}, sum reward: {sum_r}, avg reward: {avg_r}")
 
-            model_dir = os.path.join(__file__.replace("/dqn_Training.py", ""), "Models", f"DQN_simple_explore_{int(100*explore_frac)}_gamma_{int(100*gamma)}")
+            model_dir = os.path.join(__file__.replace("/dqn_Training_simple.py", ""), "Models", f"DQN_simple_explore_{int(100*explore_frac)}_gamma_{int(100*gamma)}")
             os.mkdir(model_dir)
             
             model_path = os.path.join(model_dir, "simple")
