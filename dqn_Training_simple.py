@@ -10,7 +10,7 @@ from copy import deepcopy
 
 self_play = True # if true create two agents, one that performs the opposite action to the current agents but both actions come into the replay buffer
 
-for q_func_params in [{"q_func_type":"CNN", "n_episodes":150}, {"q_func_type":"LSTM", "n_episodes":200}]:
+for q_func_params in [{"q_func_type":"CNN", "n_episodes":100}, {"q_func_type":"LSTM", "n_episodes":200}]:
     for explore_frac in reversed([0.15, 0.3, 0.45]):
         for gamma in reversed([0.33, 0.66, 0.99]):
 
