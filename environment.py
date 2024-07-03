@@ -111,7 +111,7 @@ class Simple_Env(Environment):
         self.episode_idx = 0                     # this is the index of the current state within the current episode
         S_t = self.episode[self.episode_idx] # the state is the sliding window of the economic data and the current investment position BUY or SELL
         return S_t
-    
+
     def step(self, A_t):
         self.episode_idx += 1
         S_prime = self.episode[self.episode_idx]
@@ -121,19 +121,24 @@ class Simple_Env(Environment):
         D = True if self.episode_idx+1 == self.episode.shape[0] else False
         return S_prime, deepcopy(R), D
 
+class ENVIRONMENT_DQN(Environment):
+    
+    def reset(self, start_selling=True):
+        n, _, _, _ = self.episodes.shape
+        pass
+
+    def step(self, A_t):
+        pass
+
+
 class ENVIRONMENT_DDPG(Environment):
 
-    def __init__(self, intfc, set_type="train", interval="1h", prcs_included=["open", "high", "low", "close"], other_cols=["volume"], make_rtrns=True, normalize=True, n_root=None, consider_trnsctn_cost=True) -> None:
+    def __init__(self, intfc, set_type="train", interval="1h", prcs_included=["open", "high", "low", "close"], other_cols=["volume"], make_rtrns=True, normalize=True) -> None:
         super().__init__(intfc, set_type, interval, prcs_included, other_cols, make_rtrns, normalize)
         self.n_common_vars = len(prcs_included)+len(other_cols) # variables that are not macroeconomic
-        self.n_root = n_root
-        self.consider_trnsctn_cost = consider_trnsctn_cost
-        if n_root != None:
-            self.reward_manipulation = np.vectorize(lambda x: x**(1/n_root) if x >= 0 else -np.abs(x)**(1/n_root))
-            self.trnsctn_costs = self.reward_manipulation(np.array(self.trnsctn_costs)).tolist()
-        self.trnsctn_costs = np.hstack((self.trnsctn_costs, np.mean(self.trnsctn_costs)))
-        self.n_crncs, self.n_steps, _, _ = self.episodes.shape 
+        self.n_crncs, self.n_steps, _, _ = self.episodes.shape
         self.windows = list()
+        self.volume_max = [137207.1886, 493227.88282, 447599616.7, 1404207588.9, 2249841.615, 2002898.55, 15229066811.0]
         for i in range(self.n_steps):
             window = self.__rescale_rtrns_and_trnsctn_csts(self.episodes[:,i,:,:])
             self.windows.append(window)
@@ -141,11 +146,14 @@ class ENVIRONMENT_DDPG(Environment):
 
     def __rescale_rtrns_and_trnsctn_csts(self, windows): # take root of all rtrns and transaction costs 
         economic_data = deepcopy(windows[0][self.n_common_vars:])
+        un_common_vars, econ_filler_cols = economic_data.shape
+        econ_filler_rows = np.abs(self.n_common_vars-un_common_vars)
+        fillers = np.zeros((econ_filler_rows, econ_filler_cols))
+        economic_data = np.vstack([economic_data, fillers])
         time_series = list()
-        for window in windows:
+        for i, window in enumerate(windows):
             window_ = window[:self.n_common_vars]
-            if self.n_root != None:
-                window_ = self.reward_manipulation(window_)
+            window_[4] /= self.volume_max[i]
             time_series.append(window_)
         time_series.append(economic_data)
         return time_series
@@ -153,34 +161,86 @@ class ENVIRONMENT_DDPG(Environment):
     def reset(self):
         self.episode_idx = 0
         windows = self.windows[self.episode_idx]
-        self.pf_weights = np.zeros(self.n_crncs+1) 
-        self.pf_weights[self.n_crncs] = 1.0
-        S_t = (windows, deepcopy(self.pf_weights))
+        S_t = windows
         return S_t
     
     def step(self, A_ts): # A_ts is here a vector of new weights
         self.episode_idx += 1
-        window = self.episode[self.episode_idx]
-        rtrns =  window[np.array(range(self.n_crncs))*self.n_common_vars][:,-1]
+        S_prime = self.windows[self.episode_idx]
+        rtrns =  np.array([S_prime[i][3][-1] for i in range(len(TICKERS))])
         neg_rtrn_indcs = np.where(rtrns<0)[0]
         if len(neg_rtrn_indcs) == 0 or len(neg_rtrn_indcs) == self.n_crncs:
             hold_rtrn = -np.sum(rtrns)
         else:
-            hold_rtrn = np.mean(rtrns[neg_rtrn_indcs])
+            hold_rtrn = np.sum(rtrns[neg_rtrn_indcs])
         rtrns = np.hstack((rtrns, hold_rtrn))
         R_t = rtrns*A_ts
-        weight_change = A_ts-self.pf_weights
-        if self.consider_trnsctn_cost:
-            neg_change_indcs = np.where(weight_change <= 0)[0]
-            pos_trnsctn_cost = deepcopy(self.trnsctn_costs)
-            pos_trnsctn_cost[neg_change_indcs] = 0
-            step_trnsctn_csts = pos_trnsctn_cost*weight_change
-            R_t = R_t-step_trnsctn_csts
-        self.pf_weights = A_ts
-        S_t = (window, self.pf_weights)
-        D = True if self.episode_idx+1 == self.episode.shape[0] else False
-        return S_t, R_t, D
+        D = True if self.episode_idx+1 == len(self.windows) else False
+        return S_prime, R_t, D
     
     def get_action_space(self):
         return self.n_crncs+1
 
+
+#class ENVIRONMENT_DDPG(Environment):
+#
+#    def __init__(self, intfc, set_type="train", interval="1h", prcs_included=["open", "high", "low", "close"], other_cols=["volume"], make_rtrns=True, normalize=True, n_root=None, consider_trnsctn_cost=True) -> None:
+#        super().__init__(intfc, set_type, interval, prcs_included, other_cols, make_rtrns, normalize)
+#        self.n_common_vars = len(prcs_included)+len(other_cols) # variables that are not macroeconomic
+#        self.n_root = n_root
+#        self.consider_trnsctn_cost = consider_trnsctn_cost
+#        if n_root != None:
+#            self.reward_manipulation = np.vectorize(lambda x: x**(1/n_root) if x >= 0 else -np.abs(x)**(1/n_root))
+#            self.trnsctn_costs = self.reward_manipulation(np.array(self.trnsctn_costs)).tolist()
+#        self.trnsctn_costs = np.hstack((self.trnsctn_costs, np.mean(self.trnsctn_costs)))
+#        self.n_crncs, self.n_steps, _, _ = self.episodes.shape 
+#        self.windows = list()
+#        for i in range(self.n_steps):
+#            window = self.__rescale_rtrns_and_trnsctn_csts(self.episodes[:,i,:,:])
+#            self.windows.append(window)
+#        del self.episodes
+#
+#    def __rescale_rtrns_and_trnsctn_csts(self, windows): # take root of all rtrns and transaction costs 
+#        economic_data = deepcopy(windows[0][self.n_common_vars:])
+#        time_series = list()
+#        for window in windows:
+#            window_ = window[:self.n_common_vars]
+#            if self.n_root != None:
+#                window_ = self.reward_manipulation(window_)
+#            time_series.append(window_)
+#        time_series.append(economic_data)
+#        return time_series
+# 
+#    def reset(self):
+#        self.episode_idx = 0
+#        windows = self.windows[self.episode_idx]
+#        self.pf_weights = np.zeros(self.n_crncs+1) 
+#        self.pf_weights[self.n_crncs] = 1.0
+#        S_t = (windows, deepcopy(self.pf_weights))
+#        return S_t
+#    
+#    def step(self, A_ts): # A_ts is here a vector of new weights
+#        self.episode_idx += 1
+#        window = self.episode[self.episode_idx]
+#        rtrns =  window[np.array(range(self.n_crncs))*self.n_common_vars][:,-1]
+#        neg_rtrn_indcs = np.where(rtrns<0)[0]
+#        if len(neg_rtrn_indcs) == 0 or len(neg_rtrn_indcs) == self.n_crncs:
+#            hold_rtrn = -np.sum(rtrns)
+#        else:
+#            hold_rtrn = np.mean(rtrns[neg_rtrn_indcs])
+#        rtrns = np.hstack((rtrns, hold_rtrn))
+#        R_t = rtrns*A_ts
+#        weight_change = A_ts-self.pf_weights
+#        if self.consider_trnsctn_cost:
+#            neg_change_indcs = np.where(weight_change <= 0)[0]
+#            pos_trnsctn_cost = deepcopy(self.trnsctn_costs)
+#            pos_trnsctn_cost[neg_change_indcs] = 0
+#            step_trnsctn_csts = pos_trnsctn_cost*weight_change
+#            R_t = R_t-step_trnsctn_csts
+#        self.pf_weights = A_ts
+#        S_t = (window, self.pf_weights)
+#        D = True if self.episode_idx+1 == self.episode.shape[0] else False
+#        return S_t, R_t, D
+#    
+#    def get_action_space(self):
+#        return self.n_crncs+1
