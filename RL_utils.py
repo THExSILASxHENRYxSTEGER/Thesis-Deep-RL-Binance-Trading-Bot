@@ -6,7 +6,7 @@ from torch.distributions import Categorical
 from torch.utils.data import Dataset, DataLoader
 from copy import deepcopy
 import os
-from Data_Fetcher.global_variables import DEVICE, BATCH_SIZE
+from Data_Fetcher.global_variables import DEVICE, BATCH_SIZE, TICKERS
 from random_processes import OrnsteinUhlenbeckProcess
 
 torch.manual_seed(0)
@@ -76,6 +76,26 @@ class ReplayBuffer_simple(ReplayBuffer):
         b_s_ = torch.tensor(np.array(b_s_)).float().to(self.device)
         return b_s, b_a, b_r, b_d, b_s_
     
+class ReplayBuffer_DDPG(ReplayBuffer):
+
+    def get_batch(self): 
+        b_s, b_s_ = [list() for _ in range(len(TICKERS)+1)], [list() for _ in range(len(TICKERS)+1)]
+        b_a, b_r, b_d = list(), list(), list()
+        for idx in np.random.randint(0, len(self.buffer), (self.batch_size)):
+            s, a, r, d, s_ = self.buffer[idx]
+            for i, (window_s, window_s_) in enumerate(zip(s, s_)):
+                b_s[i].append(window_s)
+                b_s_[i].append(window_s_)
+            b_a.append(a) # implement entire loop only with torch ie optimize
+            b_r.append(r)
+            b_d.append(d)
+        b_s = [torch.tensor(np.array(crncy_windows)).float().to(self.device) for crncy_windows in b_s]
+        b_a = torch.tensor(np.array(b_a)).float().to(self.device)
+        b_r = torch.tensor(np.array(b_r)).float().to(self.device)
+        b_d = torch.tensor(np.array(b_d)).float().to(self.device)
+        b_s_ = [torch.tensor(np.array(crncy_windows_)).float().to(self.device) for crncy_windows_ in b_s_]
+        return b_s, b_a, b_r, b_d, b_s_
+    
 class DQN_AGENT:
 
     def __init__(self, eps, action_space, network, device, gamma=0.99, optimizer=Adam, loss=nn.MSELoss, training=True) -> None:
@@ -128,9 +148,31 @@ class small_q_func(nn.Module):
     def __init__(self, in_chnls, action_space) -> None:
         super().__init__()
         self.cnn = nn.Sequential(
-            nn.Conv1d(in_chnls, 6, 3, padding=1),
+            nn.Conv1d(in_chnls, 2, 3, padding=1),
             nn.LeakyReLU(),
-            nn.Conv1d(6, 1, 3, padding=1),
+            nn.Conv1d(2, 1, 3, padding=1),
+            nn.LeakyReLU()
+        )
+        self.mlp = nn.Sequential(
+            nn.Linear(24, 128),
+            nn.LeakyReLU(),
+            nn.Linear(128, 256),
+            nn.LeakyReLU(),
+            nn.Linear(256, action_space))
+        
+    def forward(self, S_t):
+        cnn_out = self.cnn(S_t)
+        mlp_out = self.mlp(cnn_out)
+        return mlp_out
+
+class small_q_func_bigger(nn.Module):
+
+    def __init__(self, in_chnls, action_space) -> None:
+        super().__init__()
+        self.cnn = nn.Sequential(
+            nn.Conv1d(in_chnls, 2, 3, padding=1),
+            nn.LeakyReLU(),
+            nn.Conv1d(2, 1, 3, padding=1),
             nn.LeakyReLU()
         )
         self.mlp = nn.Sequential(
@@ -190,6 +232,42 @@ class DQN_AGENT_2:
         self.target_net.eval()
 
 ############################### Deep Learning Utilities ###########################################
+
+class CNN2(nn.Module):
+
+    def __init__(self, cnn_layers, out_size) -> None:
+        super(CNN2, self).__init__()
+        self.out_size = out_size
+        conv_seq = list()
+        for layer in cnn_layers:
+            conv_seq.append(nn.Conv1d(**layer))
+            conv_seq.append(nn.LeakyReLU())
+        self.cnn = nn.Sequential(*conv_seq)
+
+    def forward(self, S_t): # inputs have to be of type float
+        window = S_t
+        cnn_out = self.cnn(window)
+        cnn_out = torch.flatten(cnn_out, start_dim=1)
+        return cnn_out
+
+    @staticmethod
+    def create_conv1d_layers(in_chnls, out_chnls, out_sz, n_cnn_layers=2, kernel_size=4, kernel_div=1, cnn_intermed_chnls=1):
+        cnn_layers = list()
+        for i in range(n_cnn_layers):
+            layer_dict = {
+                "in_channels": cnn_intermed_chnls, 
+                "out_channels":cnn_intermed_chnls, 
+                "kernel_size": kernel_size
+            }
+            if i == 0:
+                layer_dict["in_channels"] = in_chnls
+            if i == n_cnn_layers-1:
+                layer_dict["out_channels"] = out_chnls
+            cnn_layers.append(layer_dict)
+            out_sz = out_sz-kernel_size+1
+            kernel_size = int(kernel_size/kernel_div)
+            out_size = out_sz*out_chnls
+        return cnn_layers, out_size
 
 class CNN(nn.Module):
 
@@ -509,46 +587,68 @@ class ACTOR_CRITIC_AGENT:
 
 class ACTOR(nn.Module):
     
-    def __init__(self, base_model, actor_mlp) -> None:
+    def __init__(self, crncy_encoders, action_space) -> None:
         super(ACTOR, self).__init__()
-        self.base_model = base_model
-        self.actor_mlp = actor_mlp
+        self.crncy_encoders = nn.ModuleList(crncy_encoders)
+        mlp_in_size = np.sum([crncy_encoder.out_size for crncy_encoder in crncy_encoders])
+        self.mlp = nn.Sequential(
+            nn.Linear(mlp_in_size, 256),
+            nn.LeakyReLU(),
+            nn.Linear(256, 128),
+            nn.LeakyReLU(),
+            nn.Linear(128, action_space),
+        )
         self.final_activation = nn.Softmax(dim=1) 
-        
-######## maybe not softmax but n+1 times tanh and softmax is applied by environment to get weights for steps
-######## use OU process for stability 
-######## use n seperate cnns plus one for economic data
 
-    def forward(self, S_t):
-        _, pos = S_t
-        cnn_out = self.base_model(S_t)
-        mlp_in = torch.concat((cnn_out, torch.atleast_2d(pos)), dim=1)
-        mlp_out = self.actor_mlp(mlp_in)
-        return self.final_activation(mlp_out)
+######## if above doesnt work ie nan maybe not softmax but n+1 times tanh and softmax is applied by environment to get weights for steps
+
+    def forward(self, S_t, non_batch=False):
+        mlp_in = list()
+        for window, crncy_encoder in zip(S_t, self.crncy_encoders):
+            crncy_encoding = crncy_encoder(window)
+            dims = crncy_encoding.shape
+            if non_batch:
+                r, c = dims
+                crncy_encoding = crncy_encoding.reshape(1, r*c)
+            mlp_in.append(crncy_encoding)
+        mlp_in = torch.hstack(mlp_in)
+        mlp_out = self.mlp(mlp_in)
+        final = self.final_activation(mlp_out)
+        return final
 
 class CRITIC(nn.Module):
     
-    def __init__(self, base_model, critic_mlp) -> None:
+    def __init__(self, crncy_encoders, action_space) -> None:
         super(CRITIC, self).__init__()
-        self.base_model = base_model 
-        self.critic_mlp = critic_mlp
-    
+        self.crncy_encoders = nn.ModuleList(crncy_encoders)
+        mlp_in_size = np.sum([crncy_encoder.out_size for crncy_encoder in crncy_encoders])
+        self.mlp = nn.Sequential(
+            nn.Linear(mlp_in_size+action_space, 256),
+            nn.LeakyReLU(),
+            nn.Linear(256, 128),
+            nn.LeakyReLU(),
+            nn.Linear(128, action_space),
+        )
+
     def forward(self, S_t, A_t):
-        _, pos = S_t
-        cnn_out = self.base_model(S_t)
-        mlp_in = torch.concat((cnn_out, pos, A_t), dim=1)
-        mlp_out = self.critic_mlp(mlp_in)
+        mlp_in = list()
+        for window, crncy_encoder in zip(S_t, self.crncy_encoders):
+            crncy_encoding = crncy_encoder(window)
+            mlp_in.append(crncy_encoding)
+        mlp_in.append(A_t)
+        mlp_in = torch.hstack(mlp_in)
+        mlp_out = self.mlp(mlp_in)
         return mlp_out
     
-class DDPG_AGENT_WEIGHTING:
+class DDPG_AGENT:
 
-    def __init__(self, actor, critic, eps, device, rnd_prcs_prms:dict, gamma=0.99, optimizer=Adam, value_loss_fn=nn.MSELoss, training=True, tau=0.001) -> None:
+    def __init__(self, actor, critic, eps, device, random_process, gamma=0.99, optimizer=Adam, value_loss_fn=nn.MSELoss, training=True, tau=0.001) -> None:
         #hyperparameters
         self.eps = eps
         self.device = device
         self.gamma = torch.tensor(gamma).to(self.device)
         self.training = training
-        self.rnd_prcs_prms = rnd_prcs_prms
+        self.random_process = random_process
         self.tau = tau
         # actor model
         self.actor = actor.float().to(self.device)
@@ -561,23 +661,15 @@ class DDPG_AGENT_WEIGHTING:
         self.value_loss_fn = value_loss_fn()
 
     def select_action(self, S_t, n_episode):
-        S_t = self.state_to_device(S_t)
-        A_t = self.actor(S_t).flatten().cpu().detach().numpy()
+        S_t = [torch.tensor(window).float().to(self.device) for window in S_t]
+        A_t = self.actor(S_t, non_batch=True).flatten().cpu().detach().numpy()
         torch.cuda.empty_cache()
-        noise = np.random.normal(self.rnd_prcs_prms["mu"], self.rnd_prcs_prms["sigma"], self.rnd_prcs_prms["size"]) 
+        noise = self.random_process.sample() 
         noise *= int(self.training)*self.eps(n_episode)
         A_t += noise
         A_t = np.exp(A_t)/np.sum(np.exp(A_t))
         return A_t
 
-    def state_to_device(self, S_t):
-        window, position = S_t
-        window = torch.tensor(window).float().to(self.device)
-        r, c = window.shape
-        window = window.reshape(1, r, c)
-        position = torch.tensor(position).float().to(self.device)
-        return (window, position)
-    
     def train(self, b_s, b_a, b_r, b_d, b_s_):
         # critic update
         q_batch = self.critic(b_s, b_a)
