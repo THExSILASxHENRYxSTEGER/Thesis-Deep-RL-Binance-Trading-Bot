@@ -661,7 +661,11 @@ class DDPG_AGENT:
         self.value_loss_fn = value_loss_fn()
 
     def select_action(self, S_t, n_episode):
-        S_t = [torch.tensor(window).float().to(self.device) for window in S_t]
+        window_list = list()
+        for window in S_t:
+            window_list.append(torch.tensor(window).float().to(self.device))
+        S_t = window_list
+        #S_t = [torch.tensor(window).float().to(self.device) for window in S_t]
         A_t = self.actor(S_t, non_batch=True).flatten().cpu().detach().numpy()
         torch.cuda.empty_cache()
         noise = self.random_process.sample() 
