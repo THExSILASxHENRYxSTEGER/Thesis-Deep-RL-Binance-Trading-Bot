@@ -138,6 +138,8 @@ class ENVIRONMENT_DDPG(Environment):
         self.n_common_vars = len(prcs_included)+len(other_cols) # variables that are not macroeconomic
         self.n_crncs, self.n_steps, _, _ = self.episodes.shape
         self.windows = list()
+        n_root = 4
+        self.reward_manipulation = np.vectorize(lambda x: x**(1/n_root) if x >= 0 else -np.abs(x)**(1/n_root))
         self.volume_max = [137207.1886, 493227.88282, 447599616.7, 1404207588.9, 2249841.615, 2002898.55, 15229066811.0]
         for i in range(self.n_steps):
             window = self.__rescale_rtrns_and_trnsctn_csts(self.episodes[:,i,:,:])
@@ -154,6 +156,7 @@ class ENVIRONMENT_DDPG(Environment):
         for i, window in enumerate(windows):
             window_ = window[:self.n_common_vars]
             window_[4] /= self.volume_max[i]
+            window_ = self.reward_manipulation(window_)
             time_series.append(window_)
         time_series.append(economic_data)
         return time_series
