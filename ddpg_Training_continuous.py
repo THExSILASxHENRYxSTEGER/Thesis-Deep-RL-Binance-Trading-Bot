@@ -72,13 +72,11 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":40}, {"q_func_type":"LS
                         b_s, b_a, b_r, b_d, b_s_ = buffer.get_batch()
                         agent.train(b_s, b_a, b_r, b_d, b_s_)
                     n_steps += 1
-                    break
                 sum_r = np.sum(episode_rewards)
                 sum_rewards.append(sum_r)
                 avg_r = np.mean(episode_rewards)
                 avg_rewards.append(avg_r)
                 print(f"Episode: {n_episode}, Timesteps: {n_steps}, sum reward: {sum_r}, avg reward: {avg_r}")
-                break
 
             model_path = os.path.join(__file__.replace("ddpg_Training_continuous.py", "Models"), f"DDPG_CNN_{int(100*explore_frac)}_{int(100*gamma)}")
             os.mkdir(model_path)
