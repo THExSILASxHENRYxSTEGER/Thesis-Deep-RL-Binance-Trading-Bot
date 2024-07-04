@@ -12,9 +12,9 @@ from copy import deepcopy
 
 intfc = Interface()
 
-for q_func_params in [{"q_func_type":"CNN", "n_episodes":100}, {"q_func_type":"LSTM", "n_episodes":200}]:
+for q_func_params in [{"q_func_type":"CNN", "n_episodes":40}, {"q_func_type":"LSTM", "n_episodes":200}]:
     for explore_frac in reversed([0.15, 0.3, 0.45]):
-        for gamma in reversed([0.33, 0.99, 0.66]):
+        for gamma in reversed([0.33, 0.66, 0.99]):
 
             N_EPIODES = q_func_params["n_episodes"]
             EXPLORE_FRAC = explore_frac
@@ -48,7 +48,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":100}, {"q_func_type":"L
             actor = ACTOR(crncy_encoders, action_space)
             critic = CRITIC(crncy_encoders, action_space)
 
-            random_process = OrnsteinUhlenbeckProcess(theta=0.6, mu=0.0, sigma=.4, size=action_space)
+            random_process = OrnsteinUhlenbeckProcess(theta=0.1, mu=0.0, sigma=.05, size=action_space)
 
             agent = DDPG_AGENT(actor, critic, EPSILON, DEVICE, random_process, gamma=gamma)
             buffer = ReplayBuffer_DDPG(int(action_space*episode_len), BATCH_SIZE, DEVICE, action_space)
@@ -72,29 +72,32 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":100}, {"q_func_type":"L
                         b_s, b_a, b_r, b_d, b_s_ = buffer.get_batch()
                         agent.train(b_s, b_a, b_r, b_d, b_s_)
                     n_steps += 1
+                    break
                 sum_r = np.sum(episode_rewards)
                 sum_rewards.append(sum_r)
                 avg_r = np.mean(episode_rewards)
                 avg_rewards.append(avg_r)
                 print(f"Episode: {n_episode}, Timesteps: {n_steps}, sum reward: {sum_r}, avg reward: {avg_r}")
+                break
 
-            model_path = os.path.join(os.getcwd(), "DDPG_CNN")
-            torch.save(agent.actor.state_dict(), f"{model_path}_ACTOR")
-            torch.save(agent.critic.state_dict(), f"{model_path}_CRITIC")
+            model_path = os.path.join(__file__.replace("ddpg_Training_continuous.py", "Models"), f"DDPG_CNN_{int(100*explore_frac)}_{int(100*gamma)}")
+            os.mkdir(model_path)
+            torch.save(agent.actor.state_dict(), f"{model_path}/ACTOR")
+            torch.save(agent.critic.state_dict(), f"{model_path}/CRITIC")
 
 
-            plt.plot(range(len(sum_rewards)), sum_rewards)
-            plt.xlabel("episode")
-            plt.ylabel("sum episode returns")
-            plt.show()
+            #plt.plot(range(len(sum_rewards)), sum_rewards)
+            #plt.xlabel("episode")
+            #plt.ylabel("sum episode returns")
+            #plt.show()
 
-            sum_rewards_path = os.path.join(os.getcwd(), "sum_rewards")
+            sum_rewards_path = os.path.join(model_path, "sum_rewards")
             torch.save(torch.tensor(sum_rewards), sum_rewards_path)
 
-            plt.plot(range(len(avg_rewards)), avg_rewards)
-            plt.xlabel("episode")
-            plt.ylabel("avg episode returns")
-            plt.show()
+            #plt.plot(range(len(avg_rewards)), avg_rewards)
+            #plt.xlabel("episode")
+            #plt.ylabel("avg episode returns")
+            #plt.show()
 
-            avg_rewards_path = os.path.join(os.getcwd(), "avg_rewards")
+            avg_rewards_path = os.path.join(model_path, "avg_rewards")
             torch.save(torch.tensor(avg_rewards), avg_rewards_path)

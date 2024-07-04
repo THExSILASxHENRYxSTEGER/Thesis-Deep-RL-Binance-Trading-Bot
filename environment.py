@@ -7,15 +7,19 @@ class Environment:
     
     def __init__(self, intfc, set_type="train", interval="1h", prcs_included=["open","high","low","close"], other_cols=["volume"], make_rtrns=True, normalize=True) -> None:
         self.action_space = len(DQN_ACTIONS.keys())
-        ds = intfc.get_set_type_dataset(set_type="train", interval=interval)
-        gnrl_data, spcfc_train_data = intfc.get_overall_data_and_ticker_dicts(ds)
+        ds = intfc.get_set_type_dataset(set_type=set_type, interval=interval)
+        gnrl_data, spcfc_data = intfc.get_overall_data_and_ticker_dicts(ds)
         # if any of these conditions are fulfilled the sliding windows can just be taken (maybe normalized) 
-        if set_type == "train" or not make_rtrns or not normalize: 
+        if set_type == "train": #or not make_rtrns or not normalize: 
             # self.states are the sliding windows of ticker specific and unspecific data
-            self.episodes = self.__get_sliding_window_episodes(gnrl_data, spcfc_train_data, interval, prcs_included, other_cols, make_rtrns, normalize) 
+            self.episodes = self.__get_sliding_window_episodes(gnrl_data, spcfc_data, interval, prcs_included, other_cols, make_rtrns, normalize) 
         # the test and validation set data needs to be normalized with the values in the training set so we need to extract the normmalization values and then normalize the windows with those values
         else: 
-            norm_cols = self.__get_sliding_window_episodes(gnrl_data, spcfc_train_data, interval, prcs_included, other_cols, make_rtrns, normalize, get_norm_cols=True) 
+            norm_cols = None
+            if normalize:
+                train_ds = intfc.get_set_type_dataset(set_type="train", interval=interval)
+                train_gnrl_data, spcfc_train_data = intfc.get_overall_data_and_ticker_dicts(train_ds)
+                norm_cols = self.__get_sliding_window_episodes(train_gnrl_data, spcfc_train_data, interval, prcs_included, other_cols, make_rtrns, normalize, get_norm_cols=True) 
             ds = intfc.get_set_type_dataset(set_type, interval)
             gnrl_data, spcfc_data = intfc.get_overall_data_and_ticker_dicts(ds)
             self.episodes = self.__get_sliding_window_episodes(gnrl_data, spcfc_data, interval, prcs_included, other_cols, make_rtrns, normalize, norm_cols=norm_cols)
@@ -133,14 +137,17 @@ class ENVIRONMENT_DQN(Environment):
 
 class ENVIRONMENT_DDPG(Environment):
 
-    def __init__(self, intfc, set_type="train", interval="1h", prcs_included=["open", "high", "low", "close"], other_cols=["volume"], make_rtrns=True, normalize=True) -> None:
+    def __init__(self, intfc, set_type="train", interval="1h", prcs_included=["open", "high", "low", "close"], other_cols=["volume"], make_rtrns=True, normalize=False, n_root=4) -> None:
         super().__init__(intfc, set_type, interval, prcs_included, other_cols, make_rtrns, normalize)
         self.n_common_vars = len(prcs_included)+len(other_cols) # variables that are not macroeconomic
         self.n_crncs, self.n_steps, _, _ = self.episodes.shape
         self.windows = list()
-        n_root = 4
+        n_root = n_root if type(n_root)==int else 1
         self.reward_manipulation = np.vectorize(lambda x: x**(1/n_root) if x >= 0 else -np.abs(x)**(1/n_root))
         self.volume_max = [137207.1886, 493227.88282, 447599616.7, 1404207588.9, 2249841.615, 2002898.55, 15229066811.0]
+        train_ds = intfc.get_set_type_dataset(set_type="train", interval=interval)
+        _, spcfc_train_data = intfc.get_overall_data_and_ticker_dicts(train_ds)
+        self.volume_max = np.array([np.max(spcfc_train_data[tckr]["volume"]) for tckr in TICKERS])
         for i in range(self.n_steps):
             window = self.__rescale_rtrns_and_trnsctn_csts(self.episodes[:,i,:,:])
             self.windows.append(window)
@@ -170,19 +177,19 @@ class ENVIRONMENT_DDPG(Environment):
     def step(self, A_ts): # A_ts is here a vector of new weights
         self.episode_idx += 1
         S_prime = self.windows[self.episode_idx]
-        rtrns =  np.array([S_prime[i][3][-1] for i in range(len(TICKERS))])
-        neg_rtrn_indcs = np.where(rtrns<0)[0]
-        if len(neg_rtrn_indcs) == 0 or len(neg_rtrn_indcs) == self.n_crncs:
-            hold_rtrn = -np.sum(rtrns)
-        else:
-            hold_rtrn = np.sum(rtrns[neg_rtrn_indcs])
-        rtrns = np.hstack((rtrns, hold_rtrn))
+        rtrns = np.array([S_prime[i][3][-1] for i in range(len(TICKERS))])
+        #neg_rtrn_indcs = np.where(rtrns<0)[0]
+        #if len(neg_rtrn_indcs) == 0 or len(neg_rtrn_indcs) == self.n_crncs:
+        #    hold_rtrn = -np.sum(rtrns)
+        #else:
+        #    hold_rtrn = np.sum(rtrns[neg_rtrn_indcs])
+        #rtrns = np.hstack((rtrns, hold_rtrn))
         R_t = rtrns*A_ts
         D = True if self.episode_idx+1 == len(self.windows) else False
         return S_prime, R_t, D
     
     def get_action_space(self):
-        return self.n_crncs+1
+        return self.n_crncs
 
 
 #class ENVIRONMENT_DDPG(Environment):
