@@ -592,11 +592,11 @@ class ACTOR(nn.Module):
         self.crncy_encoders = nn.ModuleList(crncy_encoders)
         mlp_in_size = np.sum([crncy_encoder.out_size for crncy_encoder in crncy_encoders])
         self.mlp = nn.Sequential(
-            nn.Linear(mlp_in_size, 256),
+            nn.Linear(mlp_in_size, 512),
             nn.LeakyReLU(),
-            nn.Linear(256, 128),
+            nn.Linear(512, 256),
             nn.LeakyReLU(),
-            nn.Linear(128, action_space),
+            nn.Linear(256, action_space),
         )
         self.final_activation = nn.Tanh() # nn.Softmax(dim=1) 
 
@@ -623,11 +623,11 @@ class CRITIC(nn.Module):
         self.crncy_encoders = nn.ModuleList(crncy_encoders)
         mlp_in_size = np.sum([crncy_encoder.out_size for crncy_encoder in crncy_encoders])
         self.mlp = nn.Sequential(
-            nn.Linear(mlp_in_size+action_space, 256),
+            nn.Linear(mlp_in_size+action_space, 512),
             nn.LeakyReLU(),
-            nn.Linear(256, 128),
+            nn.Linear(512, 256),
             nn.LeakyReLU(),
-            nn.Linear(128, action_space),
+            nn.Linear(256, action_space),
         )
 
     def forward(self, S_t, A_t):
@@ -653,18 +653,18 @@ class DDPG_AGENT:
         # actor model
         self.actor = actor.float().to(self.device)
         self.actor_target = deepcopy(self.actor).float().to(self.device)
-        self.actor_optim  = optimizer(self.actor.parameters())
+        self.actor_optim  = optimizer(self.actor.parameters(), weight_decay=0.1)
         # critic model
         self.critic = critic.float().to(self.device)
         self.critic_target = deepcopy(self.critic).float().to(self.device)
-        self.critic_optim  = optimizer(self.critic.parameters())     
+        self.critic_optim  = optimizer(self.critic.parameters(), weight_decay=0.1)     
         self.value_loss_fn = value_loss_fn()
 
     def select_action(self, S_t, n_episode):
         S_t = [torch.tensor(window).float().to(self.device) for window in S_t]
         A_t = self.actor(S_t, non_batch=True).flatten().cpu().detach().numpy()
         torch.cuda.empty_cache()
-        noise = self.random_process.sample() 
+        noise = np.random.normal(loc=0, scale=1.3, size=7) # self.random_process.sample() 
         noise *= int(self.training)*self.eps(n_episode)
         A_t += noise
         A_t = np.clip(A_t, -1., 1.)

@@ -12,9 +12,9 @@ from copy import deepcopy
 
 intfc = Interface()
 
-for q_func_params in [{"q_func_type":"CNN", "n_episodes":50}, {"q_func_type":"LSTM", "n_episodes":200}]:
-    for explore_frac in reversed([0.15, 0.3, 0.45]):
-        for gamma in reversed([0.33, 0.66, 0.99]):
+for q_func_params in [{"q_func_type":"CNN", "n_episodes":60}, {"q_func_type":"LSTM", "n_episodes":200}]:
+    for explore_frac in reversed([0.2, 0.4, 0.6]):
+        for gamma in [0.33, 0.66, 0.99]:
 
             N_EPIODES = q_func_params["n_episodes"]
             EXPLORE_FRAC = explore_frac
@@ -36,7 +36,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":50}, {"q_func_type":"LS
                 if func_type == "CNN":
                     for window in windows_t0:
                         in_chnls, _ = window.shape
-                        model_parameters = {"in_chnls":in_chnls, "out_chnls":1, "out_sz":window_len, "n_cnn_layers":2, "kernel_size":3, "kernel_div":1, "cnn_intermed_chnls":2}
+                        model_parameters = {"in_chnls":in_chnls, "out_chnls":2, "out_sz":window_len, "n_cnn_layers":2, "kernel_size":3, "kernel_div":1, "cnn_intermed_chnls":3}
                         cnn_layers, out_size  = CNN2.create_conv1d_layers(**model_parameters)
                         q_func = CNN2(cnn_layers, out_size)
                         crncy_encoders.append(q_func)
@@ -51,7 +51,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":50}, {"q_func_type":"LS
             random_process = OrnsteinUhlenbeckProcess(theta=0.3, mu=0.15, sigma=.4, size=action_space)
 
             agent = DDPG_AGENT(actor, critic, EPSILON, DEVICE, random_process, gamma=gamma)
-            buffer = ReplayBuffer_DDPG(int(2*episode_len), BATCH_SIZE, DEVICE, action_space)
+            buffer = ReplayBuffer_DDPG(int(4*episode_len), BATCH_SIZE, DEVICE, action_space)
 
             sum_rewards, avg_rewards = list(), list()
 
