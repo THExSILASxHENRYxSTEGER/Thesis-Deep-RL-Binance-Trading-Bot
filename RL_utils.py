@@ -667,7 +667,7 @@ class DDPG_AGENT:
         noise = self.random_process.sample() 
         noise *= int(self.training)*self.eps(n_episode)
         A_t += noise
-        #A_t = np.clip(A_t, -1., 1.)
+        A_t = np.clip(A_t, -1., 1.)
         return A_t
 
     def train(self, b_s, b_a, b_r, b_d, b_s_):

@@ -12,7 +12,7 @@ from copy import deepcopy
 
 intfc = Interface()
 
-for q_func_params in [{"q_func_type":"CNN", "n_episodes":30}, {"q_func_type":"LSTM", "n_episodes":200}]:
+for q_func_params in [{"q_func_type":"CNN", "n_episodes":50}, {"q_func_type":"LSTM", "n_episodes":200}]:
     for explore_frac in reversed([0.15, 0.3, 0.45]):
         for gamma in reversed([0.33, 0.66, 0.99]):
 
@@ -48,10 +48,10 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":30}, {"q_func_type":"LS
             actor = ACTOR(crncy_encoders, action_space)
             critic = CRITIC(crncy_encoders, action_space)
 
-            random_process = OrnsteinUhlenbeckProcess(theta=0.1, mu=0.0, sigma=.04, size=action_space)
+            random_process = OrnsteinUhlenbeckProcess(theta=0.3, mu=0.15, sigma=.4, size=action_space)
 
             agent = DDPG_AGENT(actor, critic, EPSILON, DEVICE, random_process, gamma=gamma)
-            buffer = ReplayBuffer_DDPG(int(action_space*episode_len), BATCH_SIZE, DEVICE, action_space)
+            buffer = ReplayBuffer_DDPG(int(2*episode_len), BATCH_SIZE, DEVICE, action_space)
 
             sum_rewards, avg_rewards = list(), list()
 
