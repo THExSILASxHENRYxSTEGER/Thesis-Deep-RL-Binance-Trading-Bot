@@ -598,7 +598,7 @@ class ACTOR(nn.Module):
             nn.LeakyReLU(),
             nn.Linear(128, action_space),
         )
-        self.final_activation = nn.Sigmoid() # nn.Softmax(dim=1) 
+        self.final_activation = nn.Tanh() # nn.Softmax(dim=1) 
 
 ######## if above doesnt work ie nan maybe not softmax but n+1 times tanh and softmax is applied by environment to get weights for steps
 
@@ -667,7 +667,7 @@ class DDPG_AGENT:
         noise = self.random_process.sample() 
         noise *= int(self.training)*self.eps(n_episode)
         A_t += noise
-        A_t = np.clip(A_t, 0.0, 1.)
+        #A_t = np.clip(A_t, -1., 1.)
         return A_t
 
     def train(self, b_s, b_a, b_r, b_d, b_s_):
