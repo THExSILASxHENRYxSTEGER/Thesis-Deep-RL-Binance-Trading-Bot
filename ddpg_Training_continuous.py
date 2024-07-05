@@ -14,7 +14,7 @@ intfc = Interface()
 
 for q_func_params in [{"q_func_type":"CNN", "n_episodes":60}, {"q_func_type":"LSTM", "n_episodes":200}]:
     for explore_frac in reversed([0.2, 0.4, 0.6]):
-        for gamma in [0.33, 0.66, 0.99]:
+        for gamma in [0.66, 0.33, 0.99]:
 
             N_EPIODES = q_func_params["n_episodes"]
             EXPLORE_FRAC = explore_frac
