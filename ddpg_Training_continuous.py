@@ -36,7 +36,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":60}, {"q_func_type":"LS
                 if func_type == "CNN":
                     for window in windows_t0:
                         in_chnls, _ = window.shape
-                        model_parameters = {"in_chnls":in_chnls, "out_chnls":2, "out_sz":window_len, "n_cnn_layers":2, "kernel_size":3, "kernel_div":1, "cnn_intermed_chnls":3}
+                        model_parameters = {"in_chnls":in_chnls, "out_chnls":1, "out_sz":window_len, "n_cnn_layers":2, "kernel_size":3, "kernel_div":1, "cnn_intermed_chnls":3}
                         cnn_layers, out_size  = CNN2.create_conv1d_layers(**model_parameters)
                         q_func = CNN2(cnn_layers, out_size)
                         crncy_encoders.append(q_func)
