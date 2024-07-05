@@ -653,11 +653,11 @@ class DDPG_AGENT:
         # actor model
         self.actor = actor.float().to(self.device)
         self.actor_target = deepcopy(self.actor).float().to(self.device)
-        self.actor_optim  = optimizer(self.actor.parameters(), weight_decay=0.001)
+        self.actor_optim  = optimizer(self.actor.parameters(), weight_decay=0.00001)
         # critic model
         self.critic = critic.float().to(self.device)
         self.critic_target = deepcopy(self.critic).float().to(self.device)
-        self.critic_optim  = optimizer(self.critic.parameters(), weight_decay=0.001)     
+        self.critic_optim  = optimizer(self.critic.parameters(), weight_decay=0.00001)     
         self.value_loss_fn = value_loss_fn()
 
     def select_action(self, S_t, n_episode):
