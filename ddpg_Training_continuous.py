@@ -20,7 +20,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":60}, {"q_func_type":"LS
             EXPLORE_FRAC = explore_frac
             EPSILON = lambda i: 1 - 0.999999 * min(1, i/(N_EPIODES * EXPLORE_FRAC))
 
-            env = ENVIRONMENT_DDPG(intfc, interval="1h", normalize=False)
+            env = ENVIRONMENT_DDPG(intfc, interval="1h", normalize=False, n_root=3)
             windows_t0 = env.windows[0]
             episode_len = len(env.windows)
             data_cols, window_len = windows_t0[0].shape
