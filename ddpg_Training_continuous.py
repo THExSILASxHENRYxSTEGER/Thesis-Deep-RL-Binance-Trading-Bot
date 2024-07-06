@@ -1,7 +1,7 @@
 from data_interface import Interface
 from environment import ENVIRONMENT_DDPG
 from RL_utils import DDPG_AGENT, ReplayBuffer_DDPG, CNN2, LSTM, load_q_func, ACTOR, CRITIC
-from Data_Fetcher.global_variables import EPSILON, TRAINING_FREQUENCY, BATCH_SIZE, WARM_START, DQN_ACTIONS, DEVICE, N_EPIODES, TICKERS
+from Data_Fetcher.global_variables import EPSILON, TRAINING_FREQUENCY, BATCH_SIZE, WARM_START, DEVICE, N_EPIODES
 from random_processes import OrnsteinUhlenbeckProcess
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,7 +12,7 @@ from copy import deepcopy
 
 intfc = Interface()
 
-for q_func_params in [{"q_func_type":"CNN", "n_episodes":60}, {"q_func_type":"LSTM", "n_episodes":200}]:
+for q_func_params in [{"q_func_type":"CNN", "n_episodes":70}, {"q_func_type":"LSTM", "n_episodes":70}]:
     for explore_frac in reversed([0.2, 0.4, 0.6]):
         for gamma in [0.66, 0.33, 0.99]:
 
@@ -20,7 +20,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":60}, {"q_func_type":"LS
             EXPLORE_FRAC = explore_frac
             EPSILON = lambda i: 1 - 0.999999 * min(1, i/(N_EPIODES * EXPLORE_FRAC))
 
-            env = ENVIRONMENT_DDPG(intfc, interval="1h", normalize=False, n_root=3)
+            env = ENVIRONMENT_DDPG(intfc, interval="1h", n_root=3)
             windows_t0 = env.windows[0]
             episode_len = len(env.windows)
             data_cols, window_len = windows_t0[0].shape
@@ -48,7 +48,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":60}, {"q_func_type":"LS
             actor = ACTOR(crncy_encoders, action_space)
             critic = CRITIC(crncy_encoders, action_space)
 
-            random_process = OrnsteinUhlenbeckProcess(theta=0.3, mu=0.15, sigma=.4, size=action_space)
+            random_process = OrnsteinUhlenbeckProcess(theta=0.1, mu=0.0, sigma=0.2, size=action_space)
 
             agent = DDPG_AGENT(actor, critic, EPSILON, DEVICE, random_process, gamma=gamma)
             buffer = ReplayBuffer_DDPG(int(4*episode_len), BATCH_SIZE, DEVICE, action_space)
@@ -83,19 +83,8 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":60}, {"q_func_type":"LS
             torch.save(agent.actor.state_dict(), f"{model_path}/ACTOR")
             torch.save(agent.critic.state_dict(), f"{model_path}/CRITIC")
 
-
-            #plt.plot(range(len(sum_rewards)), sum_rewards)
-            #plt.xlabel("episode")
-            #plt.ylabel("sum episode returns")
-            #plt.show()
-
             sum_rewards_path = os.path.join(model_path, "sum_rewards")
             torch.save(torch.tensor(sum_rewards), sum_rewards_path)
-
-            #plt.plot(range(len(avg_rewards)), avg_rewards)
-            #plt.xlabel("episode")
-            #plt.ylabel("avg episode returns")
-            #plt.show()
 
             avg_rewards_path = os.path.join(model_path, "avg_rewards")
             torch.save(torch.tensor(avg_rewards), avg_rewards_path)

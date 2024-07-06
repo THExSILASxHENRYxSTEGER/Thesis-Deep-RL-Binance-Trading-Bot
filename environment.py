@@ -125,15 +125,6 @@ class Simple_Env(Environment):
         D = True if self.episode_idx+1 == self.episode.shape[0] else False
         return S_prime, deepcopy(R), D
 
-class ENVIRONMENT_DQN(Environment):
-    
-    def reset(self, start_selling=True):
-        n, _, _, _ = self.episodes.shape
-        pass
-
-    def step(self, A_t):
-        pass
-
 
 class ENVIRONMENT_DDPG(Environment):
 
@@ -144,7 +135,6 @@ class ENVIRONMENT_DDPG(Environment):
         self.windows = list()
         n_root = n_root if type(n_root)==int else 1
         self.reward_manipulation = np.vectorize(lambda x: x**(1/n_root) if x >= 0 else -np.abs(x)**(1/n_root))
-        self.volume_max = [137207.1886, 493227.88282, 447599616.7, 1404207588.9, 2249841.615, 2002898.55, 15229066811.0]
         train_ds = intfc.get_set_type_dataset(set_type="train", interval=interval)
         _, spcfc_train_data = intfc.get_overall_data_and_ticker_dicts(train_ds)
         self.volume_max = np.array([np.max(spcfc_train_data[tckr]["volume"]) for tckr in TICKERS])
@@ -254,3 +244,28 @@ class ENVIRONMENT_DDPG(Environment):
 #    
 #    def get_action_space(self):
 #        return self.n_crncs+1
+
+
+class ENVIRONMENT_DQN(ENVIRONMENT_DDPG):
+
+    def __init__(self, intfc, set_type="train", interval="1h", prcs_included=["open", "high", "low", "close"], other_cols=["volume"], make_rtrns=True, normalize=False, n_root=4) -> None:
+            super().__init__(intfc, set_type, interval, prcs_included, other_cols, make_rtrns, normalize, n_root=n_root)
+
+    def step(self, A_t):
+        self.episode_idx += 1
+        S_prime = self.windows[self.episode_idx]
+        rtrns = np.array([S_prime[i][3][-1] for i in range(len(TICKERS))])
+        if A_t == 0:
+            pos_rtrn_indcs = np.where(rtrns>0)[0]
+            if len(pos_rtrn_indcs) == 0 or len(pos_rtrn_indcs) == self.n_crncs:
+                R_t = -np.sum(rtrns)
+            else:
+                R_t = -np.sum(rtrns[pos_rtrn_indcs])
+        else:
+            binary_A_t = "{0:b}".format(A_t)
+            R_t = np.sum([int(n)*rtrn for rtrn, n in zip(rtrns, reversed(binary_A_t))])
+        D = True if self.episode_idx+1 == len(self.windows) else False
+        return S_prime, R_t, D
+    
+    def get_action_space(self):
+        return 2**self.n_crncs
