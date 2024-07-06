@@ -14,13 +14,13 @@ intfc = Interface()
 
 for q_func_params in [{"q_func_type":"CNN", "n_episodes":30}, {"q_func_type":"LSTM", "n_episodes":30}]:
     for explore_frac in reversed([0.2, 0.4, 0.6]):
-        for gamma in [0.66, 0.33, 0.99]:
+        for gamma in [0.33, 0.66, 0.99]:
 
             N_EPIODES = q_func_params["n_episodes"]
             EXPLORE_FRAC = explore_frac
             EPSILON = lambda i: 1 - 0.999999 * min(1, i/(N_EPIODES * EXPLORE_FRAC))
 
-            env = ENVIRONMENT_DDPG(intfc, interval="1h", set_type="train", n_root=1)
+            env = ENVIRONMENT_DDPG(intfc, interval="1h", set_type="train", n_root=4)
             windows_t0 = env.windows[0]
             episode_len = len(env.windows)
             data_cols, window_len = windows_t0[0].shape
@@ -51,7 +51,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":30}, {"q_func_type":"LS
             actor = ACTOR(crncy_encoders, action_space)
             critic = CRITIC(crncy_encoders, action_space)
 
-            random_process = OrnsteinUhlenbeckProcess(theta=0.1, mu=0.0, sigma=0.1, size=action_space)
+            random_process = OrnsteinUhlenbeckProcess(theta=0.1, mu=0.0, sigma=0.15, size=action_space)
 
             agent = DDPG_AGENT(actor, critic, EPSILON, DEVICE, random_process, gamma=gamma)
             buffer = ReplayBuffer_DDPG(int(4*episode_len), BATCH_SIZE, DEVICE, action_space)

@@ -11,7 +11,7 @@ from copy import deepcopy
 
 intfc = Interface()
 
-for q_func_params in [{"q_func_type":"CNN", "n_episodes":30}, {"q_func_type":"LSTM", "n_episodes":30}]:
+for q_func_params in [{"q_func_type":"CNN", "n_episodes":100}, {"q_func_type":"LSTM", "n_episodes":100}]:
     for explore_frac in reversed([0.2, 0.4, 0.6]):
         for gamma in [0.66, 0.33, 0.99]:
 
@@ -25,7 +25,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":30}, {"q_func_type":"LS
             data_cols, window_len = windows_t0[0].shape
             data_cols_gnrl, _ = windows_t0[len(windows_t0)-1].shape
             action_space = env.get_action_space() # for DDPG action space is # of currencies ie a weighting
-            func_type = "CNN"
+            func_type = q_func_params["q_func_type"]
             model_q_func_name = None # "DQN_CNN_8_8_16_2_4_4_1_16_128_2_1"
             crncy_encoders = list()
             mlp_in_size = 0
@@ -45,7 +45,8 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":30}, {"q_func_type":"LS
                         model_parameters = {"in_sz":data_cols, "h_sz":hidden_size, "n_lstm_lyrs":window_len}
                         lstm_layers = LSTM(**model_parameters)
                         crncy_encoders.append(lstm_layers)
-                #str_vals = "_".join([str(param) for param in model_parameters.values()])
+                str_vals = "_".join([str(param) for param in model_parameters.values()])
+                net_name = f"DQN_{func_type}_" + str_vals
 
             q_func = DQN_Q_FUNC(crncy_encoders, action_space)
 
@@ -74,12 +75,11 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":30}, {"q_func_type":"LS
                 sum_rewards.append(sum_r)
                 avg_r = np.mean(episode_rewards)
                 avg_rewards.append(avg_r)
-                print(f"Episode: {n_episode}, Timesteps: {n_steps}, sum reward: {sum_r}, avg reward: {avg_r}")
+                print(f"{int(100*explore_frac)}_{int(100*gamma)}_Episode: {n_episode}, Timesteps: {n_steps}, sum reward: {sum_r}, avg reward: {avg_r}")
 
-            model_path = os.path.join(__file__.replace("ddpg_Training_continuous.py", "Models"), f"DDPG_CNN_{int(100*explore_frac)}_{int(100*gamma)}")
+            model_path = os.path.join(__file__.replace("dqn_Training_binary.py", "Models"), f"DQN_{func_type}_{int(100*explore_frac)}_{int(100*gamma)}")
             os.mkdir(model_path)
-            torch.save(agent.actor.state_dict(), f"{model_path}/ACTOR")
-            torch.save(agent.critic.state_dict(), f"{model_path}/CRITIC")
+            torch.save(agent.policy_net.state_dict(), f"{model_path}/{net_name}")
 
             sum_rewards_path = os.path.join(model_path, "sum_rewards")
             torch.save(torch.tensor(sum_rewards), sum_rewards_path)
