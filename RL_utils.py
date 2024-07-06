@@ -394,32 +394,21 @@ class CNN(nn.Module):
     
 class LSTM(nn.Module):
     
-    def __init__(self, in_sz, h_sz, n_lstm_lyrs, final_layer_size, n_mlp_lyrs=2, mlp_intermed_size=128, punctual_vals=1) -> None:
+    def __init__(self, in_sz, h_sz, n_lstm_lyrs) -> None:
         super(LSTM, self).__init__()
-        self.h_sz = h_sz
-        self.lstm_cells = nn.Sequential(*[nn.LSTMCell(in_sz, h_sz) for _ in range(n_lstm_lyrs)])
-        mlp_lyrs = list()
-        for i in range(n_mlp_lyrs):
-            in_features, out_features = mlp_intermed_size, mlp_intermed_size
-            if i == 0:
-                in_features = 2*h_sz + punctual_vals
-            if i == n_mlp_lyrs-1:
-                out_features = final_layer_size
-                mlp_lyrs.append(nn.Linear(in_features, out_features))
-                break
-            mlp_lyrs.append(nn.Linear(in_features, out_features))
-            mlp_lyrs.append(nn.LeakyReLU())
-        self.mlp = nn.Sequential(*mlp_lyrs)
+        self.out_size = h_sz
+        self.lstm_cells = nn.ModuleList([nn.LSTMCell(in_sz, h_sz) for _ in range(n_lstm_lyrs)])
 
     def forward(self, S_t, device=DEVICE):
-        window, position = S_t
-        n_batches, in_size, n_cells = window.shape 
-        window = window.reshape(n_cells, n_batches, in_size)
-        hx, cx = torch.zeros((n_batches, self.h_sz)).to(device), torch.zeros((n_batches, self.h_sz)).to(device)
+        if len(S_t.shape) == 2:
+            in_size, n_cells = S_t.shape
+            S_t = S_t.reshape(1, in_size, n_cells)
+        n_batches, in_size, n_cells = S_t.shape
+        S_t = S_t.reshape(n_cells, n_batches, in_size)
+        hx, cx = torch.zeros((n_batches, self.out_size)).to(device), torch.zeros((n_batches, self.out_size)).to(device)
         for i in range(len(self.lstm_cells)):
-            hx, cx = self.lstm_cells[i](window[i], (hx, cx))
-        mlp_in = torch.concat((hx, cx, torch.atleast_2d(position).T), dim=1)
-        return self.mlp(mlp_in)
+            hx, cx = self.lstm_cells[i](S_t[i], (hx, cx))
+        return hx
 
 def get_base_function(q_func, q_func_components):
     if q_func == "CNN":

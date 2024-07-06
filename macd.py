@@ -11,7 +11,7 @@ def get_macd_cum_rtrns(set_type="train", interval="1h"):
     intrfc = Interface()
     train_data = intrfc.get_set_type_dataset(set_type, interval)
     gnrl_train_data, spcfc_train_data = intrfc.get_overall_data_and_ticker_dicts(train_data)
-    prcs = {key:list(spcfc_train_data[key]["open"]) for key in spcfc_train_data.keys()}
+    prcs = {key:list(spcfc_train_data[key]["close"]) for key in spcfc_train_data.keys()}
     train_prcs = pd.DataFrame(prcs)
     macd = MACD()
     macd_ts = macd.calculate_macd(train_prcs)

@@ -1,8 +1,7 @@
 from data_interface import Interface
-from environment import ENVIRONMENT_DDPG
-from RL_utils import DDPG_AGENT, ReplayBuffer_DDPG, CNN2, LSTM, load_q_func, ACTOR, CRITIC
+from environment import ENVIRONMENT_DQN
+from RL_utils import DQN_Q_FUNC, ReplayBuffer_DQN, CNN2, LSTM, load_q_func, DQN_AGENT_2
 from Data_Fetcher.global_variables import EPSILON, TRAINING_FREQUENCY, BATCH_SIZE, WARM_START, DEVICE, N_EPIODES
-from random_processes import OrnsteinUhlenbeckProcess
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -20,13 +19,13 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":30}, {"q_func_type":"LS
             EXPLORE_FRAC = explore_frac
             EPSILON = lambda i: 1 - 0.999999 * min(1, i/(N_EPIODES * EXPLORE_FRAC))
 
-            env = ENVIRONMENT_DDPG(intfc, interval="1h", set_type="train", n_root=1)
+            env = ENVIRONMENT_DQN(intfc, interval="1h", set_type="test", n_root=4)
             windows_t0 = env.windows[0]
             episode_len = len(env.windows)
             data_cols, window_len = windows_t0[0].shape
             data_cols_gnrl, _ = windows_t0[len(windows_t0)-1].shape
             action_space = env.get_action_space() # for DDPG action space is # of currencies ie a weighting
-            func_type = "LSTM"
+            func_type = "CNN"
             model_q_func_name = None # "DQN_CNN_8_8_16_2_4_4_1_16_128_2_1"
             crncy_encoders = list()
             mlp_in_size = 0
@@ -48,20 +47,16 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":30}, {"q_func_type":"LS
                         crncy_encoders.append(lstm_layers)
                 #str_vals = "_".join([str(param) for param in model_parameters.values()])
 
-            actor = ACTOR(crncy_encoders, action_space)
-            critic = CRITIC(crncy_encoders, action_space)
+            q_func = DQN_Q_FUNC(crncy_encoders, action_space)
 
-            random_process = OrnsteinUhlenbeckProcess(theta=0.1, mu=0.0, sigma=0.1, size=action_space)
-
-            agent = DDPG_AGENT(actor, critic, EPSILON, DEVICE, random_process, gamma=gamma)
-            buffer = ReplayBuffer_DDPG(int(4*episode_len), BATCH_SIZE, DEVICE, action_space)
+            agent = DQN_AGENT_2(EPSILON, action_space, q_func, DEVICE, gamma=gamma)
+            buffer = ReplayBuffer_DQN(int(4*episode_len), BATCH_SIZE, DEVICE, action_space)
 
             sum_rewards, avg_rewards = list(), list()
 
             n_steps = 0
             for n_episode in range(N_EPIODES):
                 S_t = env.reset()
-                agent.random_process.reset_states()
                 D_t =  False
                 episode_rewards = list()
                 while not D_t:                            
@@ -73,7 +68,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":30}, {"q_func_type":"LS
                     S_t = deepcopy(S_prime)        
                     if n_steps > WARM_START and n_steps % TRAINING_FREQUENCY == 0:
                         b_s, b_a, b_r, b_d, b_s_ = buffer.get_batch()
-                        agent.train(b_s, b_a, b_r, b_d, b_s_)
+                        agent.train2(b_s, b_a, b_r, b_d, b_s_)
                     n_steps += 1
                 sum_r = np.sum(episode_rewards)
                 sum_rewards.append(sum_r)

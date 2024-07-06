@@ -17,7 +17,8 @@ class BuyAndHold():
             gnrl, spcfc = intrfc.get_overall_data_and_ticker_dicts(sbst)
             tmfrm = [datetime.fromtimestamp(stmp) for stmp in gnrl["open_time"]][1:]
             self.timeframes.append(tmfrm)
-            prcs_ds.append([list(spcfc[key]["open"]) for key in spcfc.keys()])
+            prcs_ds.append([list(spcfc[key]["close"]) for key in spcfc.keys()])
+        self.prcs_ds = prcs_ds
         self.rtrns = [np.array([Interface.make_prices_to_returns(prc_srs) for prc_srs in prcs]) for prcs in prcs_ds]
         self.weights = list()
         for rtrns in self.rtrns:

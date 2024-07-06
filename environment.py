@@ -130,6 +130,7 @@ class ENVIRONMENT_DDPG(Environment):
 
     def __init__(self, intfc, set_type="train", interval="1h", prcs_included=["open", "high", "low", "close"], other_cols=["volume"], make_rtrns=True, normalize=False, n_root=4) -> None:
         super().__init__(intfc, set_type, interval, prcs_included, other_cols, make_rtrns, normalize)
+        self.make_rtrns = make_rtrns
         self.n_common_vars = len(prcs_included)+len(other_cols) # variables that are not macroeconomic
         self.n_crncs, self.n_steps, _, _ = self.episodes.shape
         self.windows = list()
@@ -167,14 +168,11 @@ class ENVIRONMENT_DDPG(Environment):
     def step(self, A_ts): # A_ts is here a vector of new weights
         self.episode_idx += 1
         S_prime = self.windows[self.episode_idx]
-        rtrns = np.array([S_prime[i][3][-1] for i in range(len(TICKERS))])
-        #neg_rtrn_indcs = np.where(rtrns<0)[0]
-        #if len(neg_rtrn_indcs) == 0 or len(neg_rtrn_indcs) == self.n_crncs:
-        #    hold_rtrn = -np.sum(rtrns)
-        #else:
-        #    hold_rtrn = np.sum(rtrns[neg_rtrn_indcs])
-        #rtrns = np.hstack((rtrns, hold_rtrn))
-        R_t = rtrns*A_ts
+        if self.make_rtrns:
+            rwrds = np.array([S_prime[i][3][-1] for i in range(len(TICKERS))])
+        else:
+            rwrds = np.array([S_prime[i][3][-1]-S_prime[i][3][-2] for i in range(len(TICKERS))])
+        R_t = rwrds*A_ts
         D = True if self.episode_idx+1 == len(self.windows) else False
         return S_prime, R_t, D
     
@@ -254,16 +252,19 @@ class ENVIRONMENT_DQN(ENVIRONMENT_DDPG):
     def step(self, A_t):
         self.episode_idx += 1
         S_prime = self.windows[self.episode_idx]
-        rtrns = np.array([S_prime[i][3][-1] for i in range(len(TICKERS))])
+        if self.make_rtrns:
+            rwrds = np.array([S_prime[i][3][-1] for i in range(len(TICKERS))])
+        else:
+            rwrds = np.array([S_prime[i][3][-1]-S_prime[i][3][-2] for i in range(len(TICKERS))])
         if A_t == 0:
-            pos_rtrn_indcs = np.where(rtrns>0)[0]
-            if len(pos_rtrn_indcs) == 0 or len(pos_rtrn_indcs) == self.n_crncs:
-                R_t = -np.sum(rtrns)
+            pos_rwrds_indcs = np.where(rwrds>0)[0]
+            if len(pos_rwrds_indcs) == 0 or len(pos_rwrds_indcs) == self.n_crncs:
+                R_t = -np.sum(rwrds)
             else:
-                R_t = -np.sum(rtrns[pos_rtrn_indcs])
+                R_t = -np.sum(rwrds[pos_rwrds_indcs])
         else:
             binary_A_t = "{0:b}".format(A_t)
-            R_t = np.sum([int(n)*rtrn for rtrn, n in zip(rtrns, reversed(binary_A_t))])
+            R_t = np.sum([int(n)*rwrd for rwrd, n in zip(rwrds, reversed(binary_A_t))])
         D = True if self.episode_idx+1 == len(self.windows) else False
         return S_prime, R_t, D
     
