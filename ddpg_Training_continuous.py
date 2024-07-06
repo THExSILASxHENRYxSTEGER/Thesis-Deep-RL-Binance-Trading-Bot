@@ -12,7 +12,7 @@ from copy import deepcopy
 
 intfc = Interface()
 
-for q_func_params in [{"q_func_type":"CNN", "n_episodes":70}, {"q_func_type":"LSTM", "n_episodes":70}]:
+for q_func_params in [{"q_func_type":"CNN", "n_episodes":50}, {"q_func_type":"LSTM", "n_episodes":50}]:
     for explore_frac in reversed([0.2, 0.4, 0.6]):
         for gamma in [0.66, 0.33, 0.99]:
 
@@ -36,7 +36,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":70}, {"q_func_type":"LS
                 if func_type == "CNN":
                     for window in windows_t0:
                         in_chnls, _ = window.shape
-                        model_parameters = {"in_chnls":in_chnls, "out_chnls":1, "out_sz":window_len, "n_cnn_layers":2, "kernel_size":3, "kernel_div":1, "cnn_intermed_chnls":3}
+                        model_parameters = {"in_chnls":in_chnls, "out_chnls":1, "out_sz":window_len, "n_cnn_layers":2, "kernel_size":3, "kernel_div":1, "cnn_intermed_chnls":2}
                         cnn_layers, out_size  = CNN2.create_conv1d_layers(**model_parameters)
                         q_func = CNN2(cnn_layers, out_size)
                         crncy_encoders.append(q_func)
@@ -48,7 +48,7 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":70}, {"q_func_type":"LS
             actor = ACTOR(crncy_encoders, action_space)
             critic = CRITIC(crncy_encoders, action_space)
 
-            random_process = OrnsteinUhlenbeckProcess(theta=0.1, mu=0.0, sigma=0.2, size=action_space)
+            random_process = OrnsteinUhlenbeckProcess(theta=0.1, mu=0.0, sigma=.01, size=action_space)
 
             agent = DDPG_AGENT(actor, critic, EPSILON, DEVICE, random_process, gamma=gamma)
             buffer = ReplayBuffer_DDPG(int(4*episode_len), BATCH_SIZE, DEVICE, action_space)
