@@ -29,7 +29,6 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":30}, {"q_func_type":"LS
             func_type = "LSTM"
             model_q_func_name = None # "DQN_CNN_8_8_16_2_4_4_1_16_128_2_1"
             crncy_encoders = list()
-            mlp_in_size = 0
             if model_q_func_name != None:
                 q_func = load_q_func(model_q_func_name, eval=False, path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_CNN_8_8_16_2_4_4_1_16_128_2_1/self_play")
             else:

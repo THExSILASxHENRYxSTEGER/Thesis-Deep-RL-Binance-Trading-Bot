@@ -11,7 +11,7 @@ from copy import deepcopy
 
 intfc = Interface()
 
-for q_func_params in [{"q_func_type":"CNN", "n_episodes":100}, {"q_func_type":"LSTM", "n_episodes":100}]:
+for q_func_params in [{"q_func_type":"CNN", "n_episodes":250}, {"q_func_type":"LSTM", "n_episodes":200}]:
     for explore_frac in reversed([0.2, 0.4, 0.6]):
         for gamma in [0.33, 0.66, 0.99]:
 
@@ -28,7 +28,6 @@ for q_func_params in [{"q_func_type":"CNN", "n_episodes":100}, {"q_func_type":"L
             func_type = q_func_params["q_func_type"]
             model_q_func_name = None # "DQN_CNN_8_8_16_2_4_4_1_16_128_2_1"
             crncy_encoders = list()
-            mlp_in_size = 0
             if model_q_func_name != None:
                 q_func = load_q_func(model_q_func_name, eval=False, path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_CNN_8_8_16_2_4_4_1_16_128_2_1/self_play")
             else:

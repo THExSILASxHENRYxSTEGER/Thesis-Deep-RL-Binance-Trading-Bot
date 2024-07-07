@@ -66,7 +66,7 @@ N_EPIODES = 300
 EXPLORE_FRAC = 0.5
 EPSILON = lambda i: 1 - 0.999999 * min(1, i/(N_EPIODES * EXPLORE_FRAC))
 TARGET_UPDATE_FREQUENCY = 1000  # how frequency target q net update
-TRAINING_FREQUENCY = 4
+TRAINING_FREQUENCY = 25
 BATCH_SIZE = 32
 WARM_START = 1000  # sample times before learning
 

@@ -264,8 +264,8 @@ class ENVIRONMENT_DQN(ENVIRONMENT_DDPG):
                 R_t = -np.sum(rwrds[pos_rwrds_indcs])
         else:
             binary_A_t = "{0:b}".format(A_t)
-            buy_frac = 1/np.sum([int(n) for n in binary_A_t])
-            R_t = np.sum([int(n)*buy_frac*rwrd for rwrd, n in zip(rwrds, reversed(binary_A_t))])
+            #buy_frac = 1/np.sum([int(n) for n in binary_A_t])
+            R_t = np.sum([int(n)*rwrd for rwrd, n in zip(rwrds, reversed(binary_A_t))])
         D = True if self.episode_idx+1 == len(self.windows) else False
         return S_prime, R_t, D
     

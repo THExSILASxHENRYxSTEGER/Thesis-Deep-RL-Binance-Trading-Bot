@@ -1,7 +1,7 @@
 import torch
 from data_interface import Interface
-from environment import Environment, ENVIRONMENT_DDPG
-from RL_utils import DQN_AGENT, ACTOR_CRITIC_AGENT, load_q_func, load_policy_value_func, CNN2, ACTOR
+from environment import Environment, ENVIRONMENT_DDPG, ENVIRONMENT_DQN
+from RL_utils import DQN_AGENT, ACTOR_CRITIC_AGENT, load_q_func, load_policy_value_func, CNN2, ACTOR, LSTM, DQN_Q_FUNC, DQN_AGENT_2
 from Data_Fetcher.global_variables import DEVICE, DQN_ACTIONS, EPSILON
 import numpy as np
 import matplotlib.pyplot as plt
@@ -103,6 +103,53 @@ def cum_rtrns_DDPG(actor_path, func_type = "CNN", set_type="train", interval="1h
         plt.plot(range(len(actions[i])), actions[i])
         plt.show()
 
+def cum_rtrns_DQN(q_func_path, func_type = "CNN", set_type="train", interval="1h"):
+    intfc = Interface()
+    env = ENVIRONMENT_DQN(intfc, set_type=set_type, interval=interval, make_rtrns=False)
+    windows_t0 = env.windows[0]
+    episode_len = len(env.windows)
+    data_cols, window_len = windows_t0[0].shape
+    data_cols_gnrl, _ = windows_t0[len(windows_t0)-1].shape
+    action_space = env.get_action_space() # for DDPG action space is # of currencies ie a weighting
+    model_q_func_name = None # "DQN_CNN_8_8_16_2_4_4_1_16_128_2_1"
+    crncy_encoders = list()
+    if model_q_func_name != None:
+        q_func = load_q_func(model_q_func_name, eval=False, path="/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_CNN_8_8_16_2_4_4_1_16_128_2_1/self_play")
+    else:
+        if func_type == "CNN":
+            for window in windows_t0:
+                in_chnls, _ = window.shape
+                model_parameters = {"in_chnls":in_chnls, "out_chnls":1, "out_sz":window_len, "n_cnn_layers":2, "kernel_size":3, "kernel_div":1, "cnn_intermed_chnls":2}
+                cnn_layers, out_size  = CNN2.create_conv1d_layers(**model_parameters)
+                q_func = CNN2(cnn_layers, out_size)
+                crncy_encoders.append(q_func)
+        else:
+            hidden_size = 8
+            for _ in windows_t0:
+                model_parameters = {"in_sz":data_cols, "h_sz":hidden_size, "n_lstm_lyrs":window_len}
+                lstm_layers = LSTM(**model_parameters)
+                crncy_encoders.append(lstm_layers)
+    
+    q_func = DQN_Q_FUNC(crncy_encoders, action_space)
+    
+    q_func_state_dict = torch.load(q_func_path, map_location=DEVICE)
+    q_func.load_state_dict(q_func_state_dict)
+    agent = DQN_AGENT_2(EPSILON, action_space, q_func, DEVICE, training=False)
+    S_t = env.reset()
+    D_t =  False
+    actions = list()
+    while not D_t:                        
+        A_t = agent.select_action(torch.tensor(np.array(S_t)).float().to(DEVICE), 0)
+        A_t = A_t.detach().numpy()
+        actions.append(A_t)
+        S_t, _, D_t = env.step(A_t)
+    actions = np.squeeze(np.array(actions)).T
+    for i in range(len(actions)):
+        plt.plot(range(len(actions)), actions)
+        plt.show()
 
-actor_path = "/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DDPG_CNN_60_66/ACTOR"
-cum_rtrns_DDPG(actor_path, set_type="test")
+#actor_path = "/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DDPG_CNN_60_66/ACTOR"
+#cum_rtrns_DDPG(actor_path, set_type="test")
+
+q_func_path = "/home/honta/Desktop/Thesis/Thesis-Deep-RL-Binance-Trading-Bot/Models/DQN_CNN_60_33/DQN_CNN_5_1_24_2_3_1_2"
+cum_rtrns = cum_rtrns_DQN(q_func_path, set_type="test")
