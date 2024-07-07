@@ -236,7 +236,7 @@ class DQN_AGENT_2:
     def state_to_device(self, S_t):
         #r, c = S_t.shape
         #S_t = S_t.reshape(1, r, c)
-        S_t = torch.tensor(S_t).float().to(self.device)
+        S_t = [torch.tensor(window).float().to(self.device) for window in S_t]
         return S_t
 
     def train2(self, b_s, b_a, b_r, b_d, b_s_):
